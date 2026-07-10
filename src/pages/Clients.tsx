@@ -15,6 +15,11 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  Mail,
+  Phone,
+  Hash,
+  Home,
+  UserPlus,
 } from 'lucide-react'
 
 interface Client {
@@ -26,10 +31,7 @@ interface Client {
   region: string
   category: 'individual' | 'company'
   taxPin?: string
-}
-
-function getInitials(name: string) {
-  return name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
+  accountNumber?: string
 }
 
 /* ── Add / Edit modal ── */
@@ -69,87 +71,133 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, client, onSa
     }
   }
 
-  const inp = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none'
-  const lbl = 'block text-xs font-medium text-gray-600 mb-1'
+  const inp = 'w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-shadow placeholder:text-gray-400'
+  const lbl = 'block text-xs font-medium text-gray-600 mb-1.5'
+  const iconWrap = 'relative'
+  const fieldIcon = 'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none'
 
   if (!isOpen) return null
 
+  const isCompany = formData.category === 'company'
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-900">
-            {isEditing ? 'Edit Client' : 'New Client'}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-green-50 flex items-center justify-center">
+              <UserPlus className="h-4 w-4 text-green-600" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">
+                {isEditing ? 'Edit Client' : 'New Client'}
+              </h2>
+              <p className="text-xs text-gray-400">
+                {isEditing ? 'Update client details' : 'Add a new client to your records'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg p-1.5 transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-3">
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
           <div>
             <label className={lbl}>Client Type</label>
-            <select
-              value={formData.category || 'individual'}
-              onChange={e => setFormData(p => ({ ...p, category: e.target.value as 'individual' | 'company' }))}
-              className={inp}
-            >
-              <option value="individual">Individual</option>
-              <option value="company">Company</option>
-            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData(p => ({ ...p, category: 'individual' }))}
+                className={`flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border transition-colors ${
+                  !isCompany
+                    ? 'border-green-600 bg-green-50 text-green-700'
+                    : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <UserCheck className="h-4 w-4" /> Individual
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData(p => ({ ...p, category: 'company' }))}
+                className={`flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border transition-colors ${
+                  isCompany
+                    ? 'border-green-600 bg-green-50 text-green-700'
+                    : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <Building2 className="h-4 w-4" /> Company
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label className={lbl}>{formData.category === 'company' ? 'Company Name' : 'Full Name'} *</label>
-            <input type="text" name="name" value={formData.name || ''} required
-              onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-              className={inp} placeholder="Enter name" />
-          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className={lbl}>{isCompany ? 'Company Name' : 'Full Name'} *</label>
+              <div className={iconWrap}>
+                {isCompany ? <Building2 className={fieldIcon} /> : <UserCheck className={fieldIcon} />}
+                <input type="text" name="name" value={formData.name || ''} required
+                  onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
+                  className={inp} placeholder={isCompany ? 'Enter company name' : 'Enter full name'} />
+              </div>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={lbl}>Contact *</label>
-              <input type="text" name="contact" value={formData.contact || ''} required
-                onChange={e => setFormData(p => ({ ...p, contact: e.target.value }))}
-                className={inp} placeholder="+254…" />
+              <div className={iconWrap}>
+                <Phone className={fieldIcon} />
+                <input type="text" name="contact" value={formData.contact || ''} required
+                  onChange={e => setFormData(p => ({ ...p, contact: e.target.value }))}
+                  className={inp} placeholder="+254…" />
+              </div>
             </div>
             <div>
-              <label className={lbl}>Email</label>
-              <input type="email" name="email" value={formData.email || ''}
-                onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
-                className={inp} placeholder="optional" />
+              <label className={lbl}>Email <span className="text-gray-400 font-normal">(optional)</span></label>
+              <div className={iconWrap}>
+                <Mail className={fieldIcon} />
+                <input type="email" name="email" value={formData.email || ''}
+                  onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+                  className={inp} placeholder="client@email.com" />
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={lbl}>Tax PIN</label>
-              <input type="text" name="taxPin" value={formData.taxPin || ''}
-                onChange={e => setFormData(p => ({ ...p, taxPin: e.target.value }))}
-                className={inp} placeholder="optional" />
+              <label className={lbl}>Tax PIN <span className="text-gray-400 font-normal">(optional)</span></label>
+              <div className={iconWrap}>
+                <Hash className={fieldIcon} />
+                <input type="text" name="taxPin" value={formData.taxPin || ''}
+                  onChange={e => setFormData(p => ({ ...p, taxPin: e.target.value }))}
+                  className={inp} placeholder="A000000000X" />
+              </div>
             </div>
             <div>
               <label className={lbl}>Region</label>
-              <input type="text" name="region" value={formData.region || ''}
-                onChange={e => setFormData(p => ({ ...p, region: e.target.value }))}
-                className={inp} placeholder="e.g. Nairobi" />
+              <div className={iconWrap}>
+                <MapPin className={fieldIcon} />
+                <input type="text" name="region" value={formData.region || ''}
+                  onChange={e => setFormData(p => ({ ...p, region: e.target.value }))}
+                  className={inp} placeholder="e.g. Nairobi" />
+              </div>
+            </div>
+
+            <div className="col-span-2">
+              <label className={lbl}>Address</label>
+              <div className={iconWrap}>
+                <Home className="absolute left-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
+                <textarea name="address" rows={2} value={formData.address || ''}
+                  onChange={e => setFormData(p => ({ ...p, address: e.target.value }))}
+                  className={inp + ' resize-none'} placeholder="Street address…" />
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className={lbl}>Address</label>
-            <textarea name="address" rows={2} value={formData.address || ''}
-              onChange={e => setFormData(p => ({ ...p, address: e.target.value }))}
-              className={inp + ' resize-none'} placeholder="Street address…" />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+          <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
             <button type="button" onClick={onClose} disabled={saving}
-              className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+              className="px-4 py-2.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
               Cancel
             </button>
             <button type="submit" disabled={saving}
-              className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
+              className="px-5 py-2.5 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm">
               {saving ? 'Saving…' : isEditing ? 'Save Changes' : 'Create Client'}
             </button>
           </div>
@@ -184,7 +232,7 @@ const Clients: React.FC = () => {
         id: c.id, name: c.name, email: c.email || undefined,
         contact: c.contact, address: c.address || undefined,
         region: c.region || '', category: (c.category as 'individual' | 'company') || 'individual',
-        taxPin: c.tax_pin || undefined
+        taxPin: c.tax_pin || undefined, accountNumber: c.account_number || undefined
       })))
     } catch { setClients([]) }
     finally { setLoading(false) }
@@ -192,7 +240,7 @@ const Clients: React.FC = () => {
 
   const handleSave = async (clientData: Partial<Client>) => {
     const payload = {
-      name: clientData.name || '', email: clientData.email || '',
+      name: clientData.name || '', email: clientData.email || undefined,
       contact: clientData.contact || '', category: clientData.category || 'individual',
       tax_pin: clientData.taxPin || '', address: clientData.address || '',
       region: clientData.region || '', is_active: 1
@@ -219,7 +267,7 @@ const Clients: React.FC = () => {
   const filtered = clients.filter(c => {
     const matchesFilter = filter === 'all' || c.category === filter
     const q = searchTerm.toLowerCase()
-    const matchesSearch = !q || [c.name, c.email, c.contact, c.address, c.region]
+    const matchesSearch = !q || [c.name, c.email, c.contact, c.address, c.region, c.accountNumber]
       .some(v => v?.toLowerCase().includes(q))
     return matchesFilter && matchesSearch
   })
@@ -315,13 +363,14 @@ const Clients: React.FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Name</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Type</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Email</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Region</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Tax PIN</th>
-                  <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Name</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Account No.</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Type</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Email</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Region</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Tax PIN</th>
+                  <th className="px-4 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -333,19 +382,19 @@ const Clients: React.FC = () => {
                       onClick={() => navigate(`/clients/${client.id}`)}>
 
                       {/* Name */}
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                            isCompany ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {getInitials(client.name)}
-                          </div>
-                          <span className="text-xs font-semibold text-gray-900 whitespace-nowrap">{client.name}</span>
-                        </div>
+                      <td className="px-4 py-1.5">
+                        <span className="text-xs font-semibold text-gray-900 whitespace-nowrap">{client.name}</span>
+                      </td>
+
+                      {/* Account Number */}
+                      <td className="px-4 py-1.5">
+                        {client.accountNumber
+                          ? <span className="text-xs font-mono text-gray-600 whitespace-nowrap">{client.accountNumber}</span>
+                          : <span className="text-xs text-gray-300">—</span>}
                       </td>
 
                       {/* Type */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-1.5">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
                           isCompany ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
                         }`}>
@@ -355,15 +404,15 @@ const Clients: React.FC = () => {
                       </td>
 
                       {/* Contact */}
-                      <td className="px-4 py-2.5 text-xs text-gray-700 whitespace-nowrap">{client.contact}</td>
+                      <td className="px-4 py-1.5 text-xs text-gray-700 whitespace-nowrap">{client.contact}</td>
 
                       {/* Email */}
-                      <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                      <td className="px-4 py-1.5 text-xs text-gray-500 whitespace-nowrap">
                         {client.email || <span className="text-gray-300">—</span>}
                       </td>
 
                       {/* Region */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-1.5">
                         {client.region
                           ? <div className="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap">
                               <MapPin className="h-3 w-3 text-gray-400 shrink-0" />{client.region}
@@ -372,18 +421,18 @@ const Clients: React.FC = () => {
                       </td>
 
                       {/* Tax PIN */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-1.5">
                         {client.taxPin
                           ? <span className="text-xs font-mono text-gray-600">{client.taxPin}</span>
                           : <span className="text-xs text-gray-300">—</span>}
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
+                      <td className="px-4 py-1.5 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => navigate(`/clients/${client.id}`)}
-                            className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100"
+                            className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
                           >
                             <Eye className="h-3 w-3" />
                             View

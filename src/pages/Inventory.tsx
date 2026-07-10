@@ -5,7 +5,6 @@ import {
   Package,
   Store as StoreIcon,
   Search,
-  Filter,
   AlertCircle,
   CheckCircle2,
   Edit,
@@ -13,7 +12,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  Tag
+  Tag,
+  Wrench
 } from 'lucide-react'
 
 interface Inventory {
@@ -29,7 +29,16 @@ interface Inventory {
 }
 
 const UNITS = ['pcs', 'litres', 'kg', 'metres', 'box', 'set', 'pair', 'roll', 'sheet', 'can', 'bottle', 'drum', 'bag', 'carton']
-const STATUSES = ['active', 'inactive', 'discontinued']
+
+const STATUS_OPTIONS = ['In Stock', 'Out of Stock', 'Ordered', 'Need to Order', 'Other']
+
+const STATUS_STYLES: Record<string, string> = {
+  'In Stock': 'bg-emerald-100 text-emerald-700',
+  'Out of Stock': 'bg-red-100 text-red-700',
+  'Ordered': 'bg-blue-100 text-blue-700',
+  'Need to Order': 'bg-amber-100 text-amber-700',
+  'Other': 'bg-gray-100 text-gray-600',
+}
 
 /* ── Stock status helper ── */
 function stockStatus(qty: number, min?: number | null) {
@@ -102,6 +111,12 @@ const EditPartModal: React.FC<EditPartModalProps> = ({ isOpen, onClose, part, on
             </div>
           </div>
 
+          <div>
+            <label className={lbl}>Description</label>
+            <textarea rows={2} className={inp + ' resize-none'} value={form.description || ''} placeholder="Part description…"
+              onChange={e => set('description', e.target.value || null)} />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={lbl}>Category</label>
@@ -113,32 +128,59 @@ const EditPartModal: React.FC<EditPartModalProps> = ({ isOpen, onClose, part, on
               </select>
             </div>
             <div>
+              <label className={lbl}>Manufacturer</label>
+              <input className={inp} value={form.manufacturer || ''} placeholder="Enter manufacturer"
+                onChange={e => set('manufacturer', e.target.value || null)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label className={lbl}>Unit</label>
               <select className={inp} value={form.unit || ''} onChange={e => set('unit', e.target.value || null)}>
                 <option value="">— Select unit —</option>
                 {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
+            <div>
+              <label className={lbl}>Location</label>
+              <input className={inp} value={form.location || ''} placeholder="e.g. Shelf A3"
+                onChange={e => set('location', e.target.value || null)} />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={lbl}>Purchase Cost</label>
-              <input type="number" step="0.01" min="0" className={inp} value={form.purchase_cost ?? ''} placeholder="0.00"
-                onChange={e => set('purchase_cost', e.target.value ? Number(e.target.value) : null)} />
+              <label className={lbl}>Cost (KES)</label>
+              <input type="number" step="0.01" min="0" className={inp} value={form.unit_price ?? ''} placeholder="0.00"
+                onChange={e => set('unit_price', e.target.value ? Number(e.target.value) : null)} />
             </div>
             <div>
-              <label className={lbl}>Selling Price</label>
+              <label className={lbl}>Cost (USD)</label>
+              <input type="number" step="0.01" min="0" className={inp} value={form.unit_price_usd ?? ''} placeholder="0.00"
+                onChange={e => set('unit_price_usd', e.target.value ? Number(e.target.value) : null)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Selling Price (KES)</label>
               <input type="number" step="0.01" min="0" className={inp} value={form.selling_price ?? ''} placeholder="0.00"
                 onChange={e => set('selling_price', e.target.value ? Number(e.target.value) : null)} />
+            </div>
+            <div>
+              <label className={lbl}>Selling Price (USD)</label>
+              <input type="number" step="0.01" min="0" className={inp} value={form.selling_price_usd ?? ''} placeholder="0.00"
+                onChange={e => set('selling_price_usd', e.target.value ? Number(e.target.value) : null)} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={lbl}>Status</label>
-              <select className={inp} value={form.status || 'active'} onChange={e => set('status', e.target.value)}>
-                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              <select className={inp} value={form.status || ''} onChange={e => set('status', e.target.value)}>
+                <option value="">Select status</option>
+                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
@@ -301,18 +343,16 @@ const Inventory: React.FC = () => {
   const [stores, setStores]             = useState<Store[]>([])
   const [loading, setLoading]           = useState(true)
   const [searchTerm, setSearchTerm]     = useState('')
-  const [selectedStore, setSelectedStore] = useState<number | ''>('')
   const [isModalOpen, setIsModalOpen]         = useState(false)
   const [editingPart, setEditingPart]         = useState<Part | null>(null)
   const [isEditPartOpen, setIsEditPartOpen]   = useState(false)
   const [editPartTarget, setEditPartTarget]   = useState<Part | null>(null)
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null)
   const [page, setPage]                       = useState(1)
 
   useEffect(() => {
     Promise.all([fetchInventory(), fetchStores(), fetchParts()])
   }, [])
-
-  useEffect(() => { fetchInventory() }, [selectedStore])
 
   const fetchParts     = async () => { try { const d = await adminApiService.getParts(); setParts(Array.isArray(d) ? d : []) } catch { setParts([]) } }
   const fetchStores    = async () => { try { const d = await adminApiService.getStores(); setStores(Array.isArray(d) ? d : []) } catch { setStores([]) } }
@@ -338,6 +378,19 @@ const Inventory: React.FC = () => {
     await fetchInventory()
   }
 
+  const handleStatusChange = async (partId: number, status: string) => {
+    try {
+      setUpdatingStatusId(partId)
+      await adminApiService.updatePart(partId, { status })
+      setParts(prev => prev.map(p => p.id === partId ? { ...p, status } : p))
+    } catch (error) {
+      console.error('Error updating status:', error)
+      alert(`Failed to update status: ${(error as any).message || 'Unknown error'}`)
+    } finally {
+      setUpdatingStatusId(null)
+    }
+  }
+
   /* Build per-part rows */
   const inventoryMap = inventory.reduce((acc, inv) => {
     acc[`${inv.part_id}-${inv.store_id}`] = inv
@@ -347,8 +400,8 @@ const Inventory: React.FC = () => {
   const allRows = parts.map(part => {
     const storeInvs = stores.map(s => inventoryMap[`${part.id}-${s.id}`] ?? null)
     const total     = storeInvs.reduce((sum, inv) => sum + (inv?.quantity ?? 0), 0)
-    const lowCount  = storeInvs.filter(inv => inv && inv.min_stock_level != null && inv.quantity <= inv.min_stock_level).length
-    return { part, storeInvs, total, lowCount }
+    const isLow     = part.min_stock_level != null && total <= part.min_stock_level
+    return { part, total, isLow }
   })
 
   const filtered = allRows.filter(r => {
@@ -356,9 +409,7 @@ const Inventory: React.FC = () => {
     return !q || r.part.part_number?.toLowerCase().includes(q) || r.part.name?.toLowerCase().includes(q)
   })
 
-  const visibleStores = selectedStore ? stores.filter(s => s.id === selectedStore) : stores
-
-  const lowStockTotal = allRows.filter(r => r.lowCount > 0).length
+  const lowStockTotal = allRows.filter(r => r.isLow).length
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage   = Math.min(page, totalPages)
@@ -401,18 +452,14 @@ const Inventory: React.FC = () => {
             Categories
           </button>
 
-          {/* Store filter */}
-          <div className="relative">
-            <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-white/40 pointer-events-none" />
-            <select
-              value={selectedStore}
-              onChange={e => { setSelectedStore(e.target.value ? Number(e.target.value) : ''); setPage(1) }}
-              className="pl-7 pr-3 py-1.5 text-xs bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-green-500 appearance-none"
-            >
-              <option value="" className="text-gray-900">All Stores</option>
-              {stores.map(s => <option key={s.id} value={s.id} className="text-gray-900">{s.store_name}</option>)}
-            </select>
-          </div>
+          {/* Services button */}
+          <button
+            onClick={() => navigate('/services')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors whitespace-nowrap"
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            Services
+          </button>
 
           {/* Search */}
           <div className="relative flex-1 max-w-xs">
@@ -442,36 +489,25 @@ const Inventory: React.FC = () => {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Item ID</th>
                     <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Part No.</th>
                     <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Name</th>
                     <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Category</th>
                     <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Unit</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Buy Cost</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Cost (KES)</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Cost (USD)</th>
                     <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Sell Price</th>
+                    <th className="px-4 py-2.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Quantity</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Stock Value</th>
                     <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Status</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Alert Qty</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Notes</th>
-                    {visibleStores.map(s => (
-                      <th key={s.id} className="px-4 py-2.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">
-                        {s.store_name}
-                        {s.store_code && <span className="block text-[9px] font-normal text-gray-300 normal-case">{s.store_code}</span>}
-                      </th>
-                    ))}
-                    <th className="px-4 py-2.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Total</th>
                     <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {paginated.map(({ part, storeInvs, total, lowCount }) => {
-                    const invByStore = stores.reduce((acc, s, i) => { acc[s.id] = storeInvs[i]; return acc }, {} as Record<number, Inventory | null>)
+                  {paginated.map(({ part, total, isLow }) => {
                     return (
                       <tr key={part.id}
                         className="group hover:bg-gray-50 transition-colors cursor-pointer"
                         onClick={() => navigate(`/inventory/${part.id}`)}>
-                        {/* Item ID */}
-                        <td className="px-4 py-2.5 text-xs text-gray-400 font-mono whitespace-nowrap">#{part.id}</td>
-
                         {/* Part number */}
                         <td className="px-4 py-2.5">
                           <span className="font-mono text-xs font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md whitespace-nowrap">
@@ -494,9 +530,14 @@ const Inventory: React.FC = () => {
                         {/* Unit */}
                         <td className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">{part.unit || <span className="text-gray-300">—</span>}</td>
 
-                        {/* Purchase cost */}
+                        {/* Cost (KES) */}
                         <td className="px-4 py-2.5 text-xs text-gray-700 whitespace-nowrap">
-                          {part.purchase_cost != null ? `KES ${Number(part.purchase_cost).toLocaleString()}` : <span className="text-gray-300">—</span>}
+                          {part.unit_price != null ? `KES ${Number(part.unit_price).toLocaleString()}` : <span className="text-gray-300">—</span>}
+                        </td>
+
+                        {/* Cost (USD) */}
+                        <td className="px-4 py-2.5 text-xs text-gray-700 whitespace-nowrap">
+                          {part.unit_price_usd != null ? `$${Number(part.unit_price_usd).toLocaleString()}` : <span className="text-gray-300">—</span>}
                         </td>
 
                         {/* Selling price */}
@@ -508,58 +549,41 @@ const Inventory: React.FC = () => {
                               : <span className="text-gray-300">—</span>}
                         </td>
 
-                        {/* Status */}
-                        <td className="px-4 py-2.5">
-                          {part.status
-                            ? <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap ${
-                                part.status === 'active'       ? 'bg-green-100 text-green-700' :
-                                part.status === 'inactive'     ? 'bg-gray-100 text-gray-500'   :
-                                part.status === 'discontinued' ? 'bg-red-100 text-red-600'     :
-                                                                  'bg-gray-100 text-gray-500'
-                              }`}>{part.status}</span>
-                            : <span className="text-xs text-gray-300">—</span>}
-                        </td>
-
-                        {/* Alert qty */}
-                        <td className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">
-                          {part.min_stock_level != null ? part.min_stock_level : <span className="text-gray-300">—</span>}
-                        </td>
-
-                        {/* Notes */}
-                        <td className="px-4 py-2.5 max-w-[160px]">
-                          {part.notes
-                            ? <p className="text-[10px] text-gray-500 truncate" title={part.notes}>{part.notes}</p>
-                            : <span className="text-xs text-gray-300">—</span>}
-                        </td>
-
-                        {/* Per-store qty */}
-                        {visibleStores.map(s => {
-                          const inv = invByStore[s.id]
-                          if (!inv) return (
-                            <td key={s.id} className="px-4 py-2.5 text-center">
-                              <span className="text-xs text-gray-300">—</span>
-                            </td>
-                          )
-                          const st = stockStatus(inv.quantity, inv.min_stock_level)
-                          return (
-                            <td key={s.id} className="px-4 py-2.5 text-center">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${st.bg} ${st.color}`}>
-                                {st.label !== 'OK' && <AlertCircle className="h-3 w-3" />}
-                                {st.label === 'OK' && <CheckCircle2 className="h-3 w-3" />}
-                                {inv.quantity}
-                              </span>
-                              {inv.min_stock_level != null && (
-                                <p className="text-[9px] text-gray-400 mt-0.5">min {inv.min_stock_level}</p>
-                              )}
-                            </td>
-                          )
-                        })}
-
-                        {/* Total */}
+                        {/* Quantity */}
                         <td className="px-4 py-2.5 text-center">
-                          <span className={`text-xs font-bold ${lowCount > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${isLow ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+                            {isLow ? <AlertCircle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
                             {total}
                           </span>
+                        </td>
+
+                        {/* Stock value */}
+                        <td className="px-4 py-2.5 text-xs font-medium text-gray-700 whitespace-nowrap">
+                          {part.unit_price != null
+                            ? `KES ${(total * Number(part.unit_price)).toLocaleString()}`
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                          <div className="relative inline-block">
+                            <select
+                              value={part.status || ''}
+                              onChange={e => handleStatusChange(part.id, e.target.value)}
+                              disabled={updatingStatusId === part.id}
+                              className={`appearance-none pl-2 pr-6 py-0.5 rounded-full text-[10px] font-medium border-0 outline-none cursor-pointer disabled:opacity-50 ${
+                                part.status ? STATUS_STYLES[part.status] || STATUS_STYLES['Other'] : 'bg-gray-100 text-gray-400'
+                              }`}
+                            >
+                              <option value="" disabled>Set status</option>
+                              {STATUS_OPTIONS.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                            {updatingStatusId === part.id && (
+                              <Loader2 className="absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 animate-spin" />
+                            )}
+                          </div>
                         </td>
 
                         {/* Actions */}

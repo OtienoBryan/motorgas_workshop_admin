@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import {
   Users,
-  Building2,
   Warehouse,
   Briefcase,
   BarChart3,
@@ -40,11 +39,10 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate()
 
   const modules: ModuleTile[] = [
-    { name: 'Clients', icon: Users, route: '/key-accounts', color: 'text-blue-700', bgColor: 'bg-blue-500', badge: undefined },
+    { name: 'Clients', icon: Users, route: '/clients', color: 'text-blue-700', bgColor: 'bg-blue-500', badge: undefined },
     { name: 'Vehicles', icon: Car, route: '/vehicles', color: 'text-indigo-700', bgColor: 'bg-indigo-500', badge: undefined },
     { name: 'Parts', icon: Package, route: '/parts', color: 'text-amber-700', bgColor: 'bg-amber-500', badge: undefined },
     { name: 'Stores', icon: Store, route: '/stores', color: 'text-emerald-700', bgColor: 'bg-emerald-500', badge: undefined },
-    { name: 'Stations', icon: Building2, route: '/stations', color: 'text-purple-700', bgColor: 'bg-purple-500', badge: undefined },
     { name: 'Inventory', icon: Warehouse, route: '/inventory', color: 'text-green-700', bgColor: 'bg-green-500', badge: undefined },
     { name: 'Employees', icon: UserCheck, route: '/employees', color: 'text-teal-700', bgColor: 'bg-teal-500', badge: undefined },
     { name: 'Sales Report', icon: BarChart3, route: '/sales/report', color: 'text-pink-700', bgColor: 'bg-pink-500', badge: undefined },

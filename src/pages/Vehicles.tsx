@@ -9,7 +9,8 @@ import {
   ChevronRight,
   ArrowRight,
   User,
-  X
+  X,
+  Plus
 } from 'lucide-react'
 
 const VEHICLE_TYPE_COLORS: Record<string, string> = {
@@ -93,6 +94,13 @@ const Vehicles: React.FC = () => {
               className="w-full pl-7 pr-3 py-1.5 text-xs bg-white/10 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-green-500"
             />
           </div>
+          <button
+            onClick={() => navigate('/vehicles/new')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors whitespace-nowrap"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Vehicle
+          </button>
         </div>
       </div>
 
@@ -279,8 +287,17 @@ const Vehicles: React.FC = () => {
           </button>
         </div>
       )}
+      {/* ── Floating add button ── */}
+      <button
+        onClick={() => navigate('/vehicles/new')}
+        className="fixed bottom-6 right-6 w-12 h-12 bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all z-40"
+        title="Add Vehicle"
+      >
+        <Plus className="h-5 w-5" />
+      </button>
     </div>
   )
 }
 
 export default Vehicles
+

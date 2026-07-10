@@ -14,7 +14,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Tag,
   Truck,
   ShoppingCart
 } from 'lucide-react'
@@ -30,11 +29,10 @@ const navItems: NavItem[] = [
   { name: 'Clients', icon: Users, route: '/clients' },
   { name: 'Vehicles', icon: Car, route: '/vehicles' },
   { name: 'Inventory', icon: Warehouse, route: '/inventory' },
-  { name: 'Part Cats', icon: Tag, route: '/part-categories' },
   { name: 'Vendors', icon: Truck, route: '/vendors' },
   { name: 'Purchase', icon: ShoppingCart, route: '/purchase-orders' },
   { name: 'Accounting', icon: Calculator, route: '/sales/report' },
-  { name: 'JobCards', icon: ClipboardList, route: '/conversion' },
+  { name: 'JobCards', icon: ClipboardList, route: '/job-cards' },
   { name: 'Invoices', icon: FileText, route: '/sales/post' },
   { name: 'Estimates', icon: ClipboardCheck, route: '/sales/report' },
   { name: 'Appointments', icon: CalendarClock, route: '/calendar' },

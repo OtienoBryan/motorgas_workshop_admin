@@ -347,6 +347,7 @@ export interface ConversionClient {
   region: string | null
   category: 'individual' | 'company'
   tax_pin: string | null
+  account_number: string
   is_active: number
   created_at: string
   updated_at: string
@@ -392,6 +393,7 @@ export interface ConversionVehicle {
   unit_number?: string
   notes?: string
   photo_url?: string
+  photo_urls?: string[]
   created_at: string
   updated_at: string
   conversionClient?: ConversionClient
@@ -482,14 +484,82 @@ export interface Part {
   category?: string | null
   manufacturer?: string | null
   unit_price?: number | null
+  unit_price_usd?: number | null
   stock_quantity?: number | null
   min_stock_level?: number | null
   location?: string | null
   unit?: string | null
   purchase_cost?: number | null
   selling_price?: number | null
+  selling_price_usd?: number | null
   status?: string | null
   notes?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Service {
+  id: number
+  title: string
+  description?: string | null
+  rate: number
+  pricing_type: 'fixed' | 'hourly'
+  is_active: number
+  created_at: string
+  updated_at: string
+}
+
+export interface JobCardItem {
+  id?: number
+  job_card_id?: number
+  item_type: 'part' | 'labor'
+  part_id?: number | null
+  service_id?: number | null
+  assigned_staff_id?: number | null
+  assigned_at?: string | null
+  description: string
+  cost?: number
+  price: number
+  quantity: number
+  taxable?: number
+  amount: number
+  part?: Part
+  service?: Service
+  assignedStaff?: Staff
+  created_at?: string
+}
+
+export interface JobCard {
+  id: number
+  conversion_client_id?: number | null
+  conversion_vehicle_id?: number | null
+  status: 'open' | 'in_progress' | 'completed' | 'closed'
+  vat_enabled: number
+  vat_rate: number
+  discount: number
+  other_charges: number
+  amount_paid: number
+  notes?: string | null
+  items?: JobCardItem[]
+  conversionClient?: ConversionClient
+  conversionVehicle?: ConversionVehicle
+  created_at: string
+  updated_at: string
+}
+
+export interface VehicleInspection {
+  id: number
+  conversion_vehicle_id: number
+  conversion_client_id: number
+  assigned_staff_id: number
+  inspection_date: string
+  status: 'pending' | 'in_progress' | 'completed'
+  summary?: string | null
+  checklist?: string | null
+  issues_found?: number
+  technician?: Staff
+  conversionClient?: ConversionClient
+  conversionVehicle?: ConversionVehicle
   created_at: string
   updated_at: string
 }
@@ -2217,11 +2287,12 @@ class AdminApiService {
     }
   }
 
-  async createConversionClient(clientData: Omit<ConversionClient, 'id' | 'created_at' | 'updated_at'>): Promise<ConversionClient> {
+  async createConversionClient(clientData: Omit<ConversionClient, 'id' | 'account_number' | 'created_at' | 'updated_at'>): Promise<ConversionClient> {
     if (USE_MOCK_DATA) {
       await new Promise(resolve => setTimeout(resolve, 500))
       return {
         id: Date.now(),
+        account_number: `MT-${String(Date.now()).slice(-4)}`,
         ...clientData,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -2587,6 +2658,171 @@ class AdminApiService {
       return
     }
     return this.request<void>(`/parts/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
+  // Services (labour) Management
+  async getServices(): Promise<Service[]> {
+    console.log('🧰 [API] getServices called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return []
+    }
+    return this.request<Service[]>('/services')
+  }
+
+  async createService(serviceData: Omit<Service, 'id' | 'created_at' | 'updated_at'>): Promise<Service> {
+    console.log('🧰 [API] createService called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id: Date.now(),
+        ...serviceData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    }
+    return this.request<Service>('/services', {
+      method: 'POST',
+      body: JSON.stringify(serviceData)
+    })
+  }
+
+  async updateService(id: number, serviceData: Partial<Service>): Promise<Service> {
+    console.log('🧰 [API] updateService called for service:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id,
+        ...serviceData,
+        updated_at: new Date().toISOString()
+      } as Service
+    }
+    return this.request<Service>(`/services/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(serviceData)
+    })
+  }
+
+  async deleteService(id: number): Promise<void> {
+    console.log('🧰 [API] deleteService called for service:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return
+    }
+    return this.request<void>(`/services/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
+  // Job Cards Management
+  async getJobCards(conversionVehicleId?: number): Promise<JobCard[]> {
+    console.log('🧾 [API] getJobCards called', conversionVehicleId ? `for vehicle: ${conversionVehicleId}` : '')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return []
+    }
+    const url = conversionVehicleId ? `/job-cards?conversionVehicleId=${conversionVehicleId}` : '/job-cards'
+    return this.request<JobCard[]>(url)
+  }
+
+  async getJobCard(id: number): Promise<JobCard> {
+    console.log('🧾 [API] getJobCard called for job card:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      throw new Error('Job card not found')
+    }
+    return this.request<JobCard>(`/job-cards/${id}`)
+  }
+
+  async createJobCard(data: Partial<JobCard>): Promise<JobCard> {
+    console.log('🧾 [API] createJobCard called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id: Date.now(),
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as JobCard
+    }
+    return this.request<JobCard>('/job-cards', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async updateJobCard(id: number, data: Partial<JobCard>): Promise<JobCard> {
+    console.log('🧾 [API] updateJobCard called for job card:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id,
+        ...data,
+        updated_at: new Date().toISOString()
+      } as JobCard
+    }
+    return this.request<JobCard>(`/job-cards/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteJobCard(id: number): Promise<void> {
+    console.log('🧾 [API] deleteJobCard called for job card:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return
+    }
+    return this.request<void>(`/job-cards/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
+  // Vehicle Inspections
+  async getVehicleInspections(conversionVehicleId: number): Promise<VehicleInspection[]> {
+    console.log('🔍 [API] getVehicleInspections called for vehicle:', conversionVehicleId)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return []
+    }
+    return this.request<VehicleInspection[]>(`/vehicle-inspections?conversionVehicleId=${conversionVehicleId}`)
+  }
+
+  async getVehicleInspection(id: number): Promise<VehicleInspection> {
+    console.log('🔍 [API] getVehicleInspection called for inspection:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      throw new Error('Inspection not found')
+    }
+    return this.request<VehicleInspection>(`/vehicle-inspections/${id}`)
+  }
+
+  async createVehicleInspection(data: Partial<VehicleInspection>): Promise<VehicleInspection> {
+    console.log('🔍 [API] createVehicleInspection called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id: Date.now(),
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as VehicleInspection
+    }
+    return this.request<VehicleInspection>('/vehicle-inspections', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteVehicleInspection(id: number): Promise<void> {
+    console.log('🔍 [API] deleteVehicleInspection called for inspection:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return
+    }
+    return this.request<void>(`/vehicle-inspections/${id}`, {
       method: 'DELETE'
     })
   }
@@ -4895,8 +5131,8 @@ class AdminApiService {
   }
 
   // Staff Management
-  async getStaff(): Promise<Staff[]> {
-    console.log('👥 [API] getStaff called')
+  async getStaff(role?: string): Promise<Staff[]> {
+    console.log('👥 [API] getStaff called', role ? `for role: ${role}` : '')
     if (USE_MOCK_DATA) {
       console.log('  Using mock data')
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -5026,7 +5262,8 @@ class AdminApiService {
     
     console.log('👥 [API] Making real API call')
     try {
-      const result = await this.request<Staff[]>('/staff')
+      const url = role ? `/staff?role=${encodeURIComponent(role)}` : '/staff'
+      const result = await this.request<Staff[]>(url)
       console.log('👥 [API] Real API call result:', result)
       return result
     } catch (error) {

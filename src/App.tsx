@@ -18,8 +18,10 @@ import PurchaseOrders from './pages/PurchaseOrders'
 import NewPurchaseOrder from './pages/NewPurchaseOrder'
 import AddVehicle from './pages/AddVehicle'
 import VehicleDetails from './pages/VehicleDetails'
+import InspectionDetails from './pages/InspectionDetails'
 import Vehicles from './pages/Vehicles'
 import Parts from './pages/Parts'
+import Services from './pages/Services'
 import Stores from './pages/Stores'
 import Categories from './pages/Categories'
 import Regions from './pages/Regions'
@@ -31,6 +33,9 @@ import PostSale from './pages/PostSale'
 import KeyAccountLedgerReport from './pages/KeyAccountLedgerReport'
 import SalesReport from './pages/SalesReport'
 import Conversion from './pages/Conversion'
+import JobCards from './pages/JobCards'
+import JobCardForm from './pages/JobCardForm'
+import JobCardInvoice from './pages/JobCardInvoice'
 import Calendar from './pages/Calendar'
 import Layout from './components/Layout'
 
@@ -98,8 +103,15 @@ function AppContent() {
                 <Route path="/clients/:clientId" element={<ClientDetails />} />
                 <Route path="/clients/:clientId/vehicles/new" element={<AddVehicle />} />
                 <Route path="/clients/:clientId/vehicles/:vehicleId" element={<VehicleDetails />} />
+                <Route path="/clients/:clientId/vehicles/:vehicleId/inspections/:inspectionId" element={<InspectionDetails />} />
                 <Route path="/vehicles" element={<Vehicles />} />
+                <Route path="/vehicles/new" element={<AddVehicle />} />
                 <Route path="/parts" element={<Parts />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/job-cards" element={<JobCards />} />
+                <Route path="/job-cards/new" element={<JobCardForm />} />
+                <Route path="/job-cards/:id" element={<JobCardForm />} />
+                <Route path="/job-cards/:id/invoice" element={<JobCardInvoice />} />
                 <Route path="/stores" element={<Stores />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/notices" element={<Notices />} />
