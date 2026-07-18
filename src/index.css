@@ -58,6 +58,16 @@
   }
 }
 
+/* Scrollable area with the scrollbar hidden */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Admin specific styles */
 .admin-sidebar {
   background: linear-gradient(135deg, #2AAA8A 0%, #2AAA8A 100%);

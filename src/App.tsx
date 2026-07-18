@@ -9,6 +9,7 @@ import Employees from './pages/Employees'
 import KeyAccounts from './pages/KeyAccounts'
 import KeyAccountManage from './pages/KeyAccountManage'
 import Clients from './pages/Clients'
+import ClientForm from './pages/ClientForm'
 import ClientDetails from './pages/ClientDetails'
 import PartCategories from './pages/PartCategories'
 import PartDetails from './pages/PartDetails'
@@ -17,6 +18,7 @@ import VendorLedger from './pages/VendorLedger'
 import PurchaseOrders from './pages/PurchaseOrders'
 import NewPurchaseOrder from './pages/NewPurchaseOrder'
 import AddVehicle from './pages/AddVehicle'
+import EditVehicle from './pages/EditVehicle'
 import VehicleDetails from './pages/VehicleDetails'
 import InspectionDetails from './pages/InspectionDetails'
 import Vehicles from './pages/Vehicles'
@@ -36,6 +38,9 @@ import Conversion from './pages/Conversion'
 import JobCards from './pages/JobCards'
 import JobCardForm from './pages/JobCardForm'
 import JobCardInvoice from './pages/JobCardInvoice'
+import Invoices from './pages/Invoices'
+import Quotations from './pages/Quotations'
+import Accounts from './pages/Accounts'
 import Calendar from './pages/Calendar'
 import Layout from './components/Layout'
 
@@ -100,8 +105,11 @@ function AppContent() {
                 <Route path="/key-accounts" element={<KeyAccounts />} />
                 <Route path="/key-accounts/:id/manage" element={<KeyAccountManage />} />
                 <Route path="/clients" element={<Clients />} />
+                <Route path="/clients/new" element={<ClientForm />} />
+                <Route path="/clients/:clientId/edit" element={<ClientForm />} />
                 <Route path="/clients/:clientId" element={<ClientDetails />} />
                 <Route path="/clients/:clientId/vehicles/new" element={<AddVehicle />} />
+                <Route path="/clients/:clientId/vehicles/:vehicleId/edit" element={<EditVehicle />} />
                 <Route path="/clients/:clientId/vehicles/:vehicleId" element={<VehicleDetails />} />
                 <Route path="/clients/:clientId/vehicles/:vehicleId/inspections/:inspectionId" element={<InspectionDetails />} />
                 <Route path="/vehicles" element={<Vehicles />} />
@@ -112,6 +120,9 @@ function AppContent() {
                 <Route path="/job-cards/new" element={<JobCardForm />} />
                 <Route path="/job-cards/:id" element={<JobCardForm />} />
                 <Route path="/job-cards/:id/invoice" element={<JobCardInvoice />} />
+                <Route path="/invoices" element={<Invoices />} />
+                <Route path="/quotations" element={<Quotations />} />
+                <Route path="/accounts" element={<Accounts />} />
                 <Route path="/stores" element={<Stores />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/notices" element={<Notices />} />

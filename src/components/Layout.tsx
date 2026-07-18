@@ -21,9 +21,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const isDashboard = location.pathname === '/dashboard'
 
-  // Track inactivity - show screensaver after 20 seconds
+  // Track inactivity - show screensaver after 20 minutes
   useInactivity({
-    timeout: 20000, // 20 seconds
+    timeout: 20 * 60 * 1000, // 20 minutes
     onInactive: () => {
       console.log('Screensaver activated - user inactive')
       setScreensaverActive(true)
@@ -49,7 +49,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="sticky top-0 z-10 flex h-10 flex-shrink-0 bg-white shadow">
           <div className="flex flex-1 justify-between px-4">
             <div className="flex flex-1 items-center gap-4">
-              <h1 className="text-lg font-bold text-green-800">MotorGas Technologies</h1>
+              <h1 className="text-xl font-bold text-green-800">MotorGas Africa</h1>
               <Link
                 to="/dashboard"
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${

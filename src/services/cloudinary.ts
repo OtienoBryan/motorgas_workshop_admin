@@ -98,11 +98,60 @@ class CloudinaryService {
    * Upload multiple images
    */
   async uploadMultipleImages(
-    files: File[], 
+    files: File[],
     options: CloudinaryUploadOptions = {}
   ): Promise<CloudinaryUploadResult[]> {
     const uploadPromises = files.map(file => this.uploadImage(file, options))
     return Promise.all(uploadPromises)
+  }
+
+  /**
+   * Upload a document (image or PDF) using Cloudinary's 'auto' resource type
+   */
+  async uploadDocument(
+    file: File,
+    options: CloudinaryUploadOptions = {}
+  ): Promise<CloudinaryUploadResult> {
+    if (!this.isConfigured) {
+      throw new Error('Cloudinary is not configured. Please set up your environment variables.')
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('upload_preset', this.uploadPreset)
+
+    if (options.folder) {
+      formData.append('folder', options.folder)
+    }
+
+    if (options.tags) {
+      formData.append('tags', options.tags.join(','))
+    }
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${this.cloudName}/auto/upload`,
+      {
+        method: 'POST',
+        body: formData
+      }
+    )
+
+    const result = await response.json().catch((): any => null)
+
+    if (!response.ok) {
+      const message = result?.error?.message || response.statusText
+      console.error('Cloudinary upload error:', message)
+      throw new Error(message)
+    }
+
+    return {
+      public_id: result.public_id,
+      secure_url: result.secure_url,
+      width: result.width,
+      height: result.height,
+      format: result.format,
+      bytes: result.bytes
+    }
   }
 
   /**

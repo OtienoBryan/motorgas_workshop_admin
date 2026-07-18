@@ -27,7 +27,7 @@ function typeStyle(t?: string) {
   return VEHICLE_TYPE_COLORS[t] ?? 'bg-gray-100 text-gray-600'
 }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 const Vehicles: React.FC = () => {
   const navigate = useNavigate()
@@ -35,6 +35,7 @@ const Vehicles: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   useEffect(() => { fetchVehicles() }, [])
@@ -60,9 +61,9 @@ const Vehicles: React.FC = () => {
     ].some(s => s?.toLowerCase().includes(q))
   })
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const safePage   = Math.min(page, totalPages)
-  const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const paginated  = filtered.slice((safePage - 1) * pageSize, safePage * pageSize)
 
   if (loading) {
     return (
@@ -88,7 +89,7 @@ const Vehicles: React.FC = () => {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-white/40" />
             <input
               type="text"
-              placeholder="Search plate, make, model, client…"
+              placeholder="Search plate, make, model, owner…"
               value={searchTerm}
               onChange={e => { setSearchTerm(e.target.value); setPage(1) }}
               className="w-full pl-7 pr-3 py-1.5 text-xs bg-white/10 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-green-500"
@@ -129,8 +130,9 @@ const Vehicles: React.FC = () => {
                   <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Engine</th>
                   <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Mileage</th>
                   <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">VIN</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Unit</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Client</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Tank Capacity</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Telemetry Status</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Owner</th>
                   <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
@@ -195,8 +197,21 @@ const Vehicles: React.FC = () => {
                       <span className="font-mono text-[10px] text-gray-500">{v.vin_serial_number || <span className="text-gray-300">—</span>}</span>
                     </td>
 
-                    {/* Unit */}
-                    <td className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">{v.unit_number || <span className="text-gray-300">—</span>}</td>
+                    {/* Tank Capacity */}
+                    <td className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">{v.tank_capacity || <span className="text-gray-300">—</span>}</td>
+
+                    {/* Telemetry Status */}
+                    <td className="px-4 py-2.5 whitespace-nowrap">
+                      {v.telemetry_status
+                        ? <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                            v.telemetry_status.toLowerCase() === 'active'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {v.telemetry_status}
+                          </span>
+                        : <span className="text-xs text-gray-300">—</span>}
+                    </td>
 
                     {/* Client */}
                     <td className="px-4 py-2.5">
@@ -208,14 +223,14 @@ const Vehicles: React.FC = () => {
                             <User className="h-3 w-3 text-gray-400 shrink-0" />
                             {v.conversionClient.name}
                           </button>
-                        : <span className="text-xs text-gray-400">Client #{v.conversion_client_id}</span>}
+                        : <span className="text-xs text-gray-400">Owner #{v.conversion_client_id}</span>}
                     </td>
 
                     {/* Actions */}
                     <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => navigate(`/clients/${v.conversion_client_id}/vehicles/${v.id}`)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100 ml-auto"
+                        className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors ml-auto"
                       >
                         View
                         <ArrowRight className="h-3 w-3" />
@@ -229,11 +244,23 @@ const Vehicles: React.FC = () => {
         )}
 
         {/* ── Pagination ── */}
-        {filtered.length > PAGE_SIZE && (
+        {filtered.length > 0 && (
           <div className="flex items-center justify-between mt-3 px-1">
-            <p className="text-xs text-gray-400">
-              Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-gray-400">
+                Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400">Per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+                  className="px-2 py-1 text-xs border border-gray-200 rounded-lg text-gray-600 outline-none focus:ring-1 focus:ring-green-500 bg-white"
+                >
+                  {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
                 className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">

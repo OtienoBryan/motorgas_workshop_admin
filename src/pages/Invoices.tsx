@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminApiService, JobCard } from '../services/api'
-import { STATUS_STYLES, STATUS_LABELS } from './JobCardForm'
+import { ESTIMATE_STAGE_STATUSES } from './JobCardForm'
 import {
-  Plus,
   Search,
-  ClipboardList,
+  FileText,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -15,32 +14,24 @@ import {
   Wallet,
   CreditCard,
   AlertCircle,
-  TrendingUp,
+  Eye,
 } from 'lucide-react'
 
-function jobCardFinancials(jc: JobCard) {
+function invoiceFinancials(jc: JobCard) {
   const items = jc.items || []
   const subtotal = items.reduce((sum, i) => sum + Number(i.amount || 0), 0)
   const taxable = items.filter(i => i.taxable !== 0).reduce((sum, i) => sum + Number(i.amount || 0), 0)
   const vat = jc.vat_enabled ? taxable * (Number(jc.vat_rate) / 100) : 0
   const discount = Number(jc.discount || 0)
   const total = subtotal + vat - discount + Number(jc.other_charges || 0)
-
-  const profitFromParts = items.filter(i => i.item_type === 'part')
-    .reduce((sum, i) => sum + (Number(i.price || 0) - Number(i.cost || 0)) * Number(i.quantity || 0), 0)
-  const profitFromLabor = items.filter(i => i.item_type === 'labor')
-    .reduce((sum, i) => sum + Number(i.amount || 0), 0)
-  const profit = profitFromParts + profitFromLabor - discount
-
   const amountPaid = Number(jc.amount_paid || 0)
   const balanceDue = total - amountPaid
-
-  return { total, profit, amountPaid, balanceDue }
+  return { total, amountPaid, balanceDue }
 }
 
 const PAGE_SIZE = 15
 
-const JobCards: React.FC = () => {
+const Invoices: React.FC = () => {
   const navigate = useNavigate()
   const [jobCards, setJobCards] = useState<JobCard[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,7 +44,9 @@ const JobCards: React.FC = () => {
     try {
       setLoading(true)
       const data = await adminApiService.getJobCards()
-      setJobCards(Array.isArray(data) ? data : [])
+      // Only converted job cards are invoices — quotations live on the Job Cards page
+      const invoiced = (Array.isArray(data) ? data : []).filter(jc => !ESTIMATE_STAGE_STATUSES.includes(jc.status))
+      setJobCards(invoiced)
     } catch {
       setJobCards([])
     } finally {
@@ -71,16 +64,13 @@ const JobCards: React.FC = () => {
   const safePage   = Math.min(page, totalPages)
   const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
-  const openCount = jobCards.filter(jc => jc.status === 'open').length
-
   const totals = jobCards.reduce((acc, jc) => {
-    const fin = jobCardFinancials(jc)
+    const fin = invoiceFinancials(jc)
     acc.total += fin.total
     acc.paid += fin.amountPaid
     acc.balance += fin.balanceDue
-    acc.profit += fin.profit
     return acc
-  }, { total: 0, paid: 0, balance: 0, profit: 0 })
+  }, { total: 0, paid: 0, balance: 0 })
 
   const money = (n: number) => `KES ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -99,48 +89,33 @@ const JobCards: React.FC = () => {
       <div className="text-white px-5 py-3" style={{ backgroundColor: '#0b0f24' }}>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <h1 className="text-sm font-bold whitespace-nowrap">Job Cards</h1>
-            <div className="flex items-center gap-1.5">
-              <span className="px-2 py-0.5 rounded-full bg-white/10 text-[10px] text-white/70">
-                {jobCards.length} total
-              </span>
-              {openCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-[10px] text-blue-300">
-                  {openCount} open
-                </span>
-              )}
-            </div>
+            <h1 className="text-sm font-bold whitespace-nowrap">Invoices</h1>
+            <span className="px-2 py-0.5 rounded-full bg-white/10 text-[10px] text-white/70">
+              {jobCards.length} total
+            </span>
           </div>
 
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-white/40" />
             <input
               type="text"
-              placeholder="Search client, plate, job #…"
+              placeholder="Search client, plate, invoice #…"
               value={searchTerm}
               onChange={e => { setSearchTerm(e.target.value); setPage(1) }}
               className="w-full pl-7 pr-3 py-1.5 text-xs bg-white/10 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-green-500"
             />
           </div>
-
-          <button
-            onClick={() => navigate('/job-cards/new')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors whitespace-nowrap"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New Job Card
-          </button>
         </div>
       </div>
 
       {/* ── Summary cards ── */}
-      <div className="px-5 pt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="px-5 pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
             <Wallet className="h-4 w-4 text-blue-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total Billed</p>
+            <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total Invoiced</p>
             <p className="text-sm font-bold text-gray-900 truncate">{money(totals.total)}</p>
           </div>
         </div>
@@ -162,15 +137,6 @@ const JobCards: React.FC = () => {
             <p className="text-sm font-bold text-gray-900 truncate">{money(totals.balance)}</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total Profit</p>
-            <p className="text-sm font-bold text-gray-900 truncate">{money(totals.profit)}</p>
-          </div>
-        </div>
       </div>
 
       {/* ── Table ── */}
@@ -178,11 +144,11 @@ const JobCards: React.FC = () => {
         {filtered.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-              <ClipboardList className="h-6 w-6 text-gray-300" />
+              <FileText className="h-6 w-6 text-gray-300" />
             </div>
-            <p className="text-sm font-medium text-gray-500">No job cards found</p>
+            <p className="text-sm font-medium text-gray-500">No invoices found</p>
             <p className="text-xs text-gray-400 mt-1">
-              {searchTerm ? 'Try adjusting your search' : 'Create your first job card to get started'}
+              {searchTerm ? 'Try adjusting your search' : 'Invoices are generated from job cards'}
             </p>
           </div>
         ) : (
@@ -190,77 +156,62 @@ const JobCards: React.FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Job #</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Invoice #</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Client</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Vehicle</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Model</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Status</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Total</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Paid</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Balance Due</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Profit</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Amount</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Amount Paid</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Balance</th>
                   <th className="px-4 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {paginated.map(jc => {
-                const fin = jobCardFinancials(jc)
-                return (
-                  <tr key={jc.id}
-                    className="group hover:bg-gray-50 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/job-cards/${jc.id}`)}>
-                    <td className="px-4 py-1.5">
-                      <span className="font-mono text-xs font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md">
-                        #{jc.id}
-                      </span>
-                    </td>
-                    <td className="px-4 py-1.5">
-                      {jc.conversionClient
-                        ? <span className="flex items-center gap-1 text-xs text-gray-700 whitespace-nowrap">
-                            <User className="h-3 w-3 text-gray-400 shrink-0" />{jc.conversionClient.name}
-                          </span>
-                        : <span className="text-xs text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-1.5">
-                      {jc.conversionVehicle
-                        ? <span className="flex items-center gap-1 text-xs font-mono text-gray-700 whitespace-nowrap">
-                            <Car className="h-3 w-3 text-gray-400 shrink-0" />{jc.conversionVehicle.registration_number}
-                          </span>
-                        : <span className="text-xs text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-1.5 text-xs text-gray-600 whitespace-nowrap">
-                      {jc.conversionVehicle
-                        ? [jc.conversionVehicle.year, jc.conversionVehicle.make, jc.conversionVehicle.model].filter(Boolean).join(' ')
-                        : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-1.5">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap ${STATUS_STYLES[jc.status]}`}>
-                        {STATUS_LABELS[jc.status]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-1.5 text-xs font-semibold text-gray-900 whitespace-nowrap">
-                      KES {fin.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-1.5 text-xs text-gray-700 whitespace-nowrap">
-                      KES {fin.amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td className={`px-4 py-1.5 text-xs font-medium whitespace-nowrap ${fin.balanceDue > 0 ? 'text-red-600' : 'text-gray-700'}`}>
-                      KES {fin.balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-1.5 text-xs font-medium text-green-600 whitespace-nowrap">
-                      KES {fin.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-1.5 text-right">
-                      <button
-                        onClick={() => navigate(`/job-cards/${jc.id}`)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors ml-auto"
-                      >
-                        Open
-                        <ArrowRight className="h-3 w-3" />
-                      </button>
-                    </td>
-                  </tr>
-                )})}
+                  const fin = invoiceFinancials(jc)
+                  return (
+                    <tr key={jc.id}
+                      className="group hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/job-cards/${jc.id}/invoice`)}>
+                      <td className="px-4 py-1.5">
+                        <span className="font-mono text-xs font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md">
+                          INV-{String(jc.id).padStart(4, '0')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-1.5">
+                        {jc.conversionClient
+                          ? <span className="flex items-center gap-1 text-xs text-gray-700 whitespace-nowrap">
+                              <User className="h-3 w-3 text-gray-400 shrink-0" />{jc.conversionClient.name}
+                            </span>
+                          : <span className="text-xs text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-1.5">
+                        {jc.conversionVehicle
+                          ? <span className="flex items-center gap-1 text-xs font-mono text-gray-700 whitespace-nowrap">
+                              <Car className="h-3 w-3 text-gray-400 shrink-0" />{jc.conversionVehicle.registration_number}
+                            </span>
+                          : <span className="text-xs text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-1.5 text-xs font-semibold text-gray-900 whitespace-nowrap">
+                        {money(fin.total)}
+                      </td>
+                      <td className="px-4 py-1.5 text-xs text-gray-700 whitespace-nowrap">
+                        {money(fin.amountPaid)}
+                      </td>
+                      <td className={`px-4 py-1.5 text-xs font-medium whitespace-nowrap ${fin.balanceDue > 0 ? 'text-red-600' : 'text-gray-700'}`}>
+                        {money(fin.balanceDue)}
+                      </td>
+                      <td className="px-4 py-1.5 text-right">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/job-cards/${jc.id}/invoice`) }}
+                          className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors ml-auto"
+                        >
+                          <Eye className="h-3 w-3" />
+                          View
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  )})}
               </tbody>
             </table>
           </div>
@@ -299,17 +250,8 @@ const JobCards: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* ── Floating add button ── */}
-      <button
-        onClick={() => navigate('/job-cards/new')}
-        className="fixed bottom-6 right-6 w-12 h-12 bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all z-40"
-        title="New Job Card"
-      >
-        <Plus className="h-5 w-5" />
-      </button>
     </div>
   )
 }
 
-export default JobCards
+export default Invoices

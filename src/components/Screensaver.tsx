@@ -9,209 +9,111 @@ const Screensaver: React.FC<ScreensaverProps> = ({ isActive, onDismiss }) => {
   const [currentTime, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
-    console.log('Screensaver isActive changed:', isActive)
-  }, [isActive])
-
-  useEffect(() => {
     if (!isActive) return
-
-    console.log('Screensaver activated, starting clock')
-    const interval = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-
-    return () => {
-      console.log('Screensaver deactivated, stopping clock')
-      clearInterval(interval)
-    }
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(interval)
   }, [isActive])
 
-  if (!isActive) {
-    console.log('Screensaver not active, returning null')
-    return null
-  }
+  if (!isActive) return null
 
-  console.log('Rendering screensaver')
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  }
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  }
+  const time = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const seconds = currentTime.toLocaleTimeString([], { second: '2-digit' }).padStart(2, '0')
+  const date = currentTime.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden"
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden cursor-pointer select-none"
       onClick={onDismiss}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' || e.key === 'Enter') {
-          onDismiss()
-        }
-      }}
+      onKeyDown={() => onDismiss()}
       tabIndex={0}
-      style={{
-        background: 'linear-gradient(135deg, #2AAA8A 0%,rgb(19, 87, 4) 50%, #2AAA8A 100%)',
-        backgroundSize: '400% 400%',
-        animation: 'gradientShift 8s ease infinite'
-      }}
+      style={{ backgroundColor: '#0b0f24' }}
     >
       <style>{`
-        @keyframes gradientShift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+        @keyframes ss-fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.9); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes float {
-          0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); }
-          25% { transform: translateY(-10px) translateX(5px) rotate(1deg); }
-          50% { transform: translateY(-15px) translateX(0px) rotate(0deg); }
-          75% { transform: translateY(-10px) translateX(-5px) rotate(-1deg); }
-        }
-        @keyframes floatSlow {
-          0%, 100% { transform: translateY(0px) translateX(0px); }
-          25% { transform: translateY(-3px) translateX(2px); }
-          50% { transform: translateY(-5px) translateX(0px); }
-          75% { transform: translateY(-3px) translateX(-2px); }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.05); }
-        }
-        @keyframes slideInUp {
-          from { opacity: 0; transform: translateY(30px); }
+        @keyframes ss-rise {
+          from { opacity: 0; transform: translateY(24px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes slideInDown {
-          from { opacity: 0; transform: translateY(-30px); }
-          to { opacity: 1; transform: translateY(0); }
+        @keyframes ss-drift1 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(60px, -40px) scale(1.15); }
         }
-        @keyframes rotate {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+        @keyframes ss-drift2 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-50px, 30px) scale(1.1); }
         }
-        @keyframes shimmer {
-          0% { background-position: -1000px 0; }
-          100% { background-position: 1000px 0; }
+        @keyframes ss-blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.25; }
         }
-        @keyframes glow {
-          0%, 100% { text-shadow: 0 0 20px rgba(255, 255, 255, 0.5), 0 0 40px rgba(255, 255, 255, 0.3); }
-          50% { text-shadow: 0 0 30px rgba(255, 255, 255, 0.8), 0 0 60px rgba(255, 255, 255, 0.5); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.8s ease-out;
-        }
-        .animate-float {
-          animation: float 4s ease-in-out infinite;
-        }
-        .animate-pulse-slow {
-          animation: pulse 3s ease-in-out infinite;
-        }
-        .animate-slideInUp {
-          animation: slideInUp 1s ease-out 0.3s both;
-        }
-        .animate-slideInDown {
-          animation: slideInDown 1s ease-out 0.5s both;
-        }
-        .animate-glow {
-          animation: glow 2s ease-in-out infinite;
+        @keyframes ss-hint {
+          0%, 100% { opacity: 0.45; }
+          50% { opacity: 0.9; }
         }
       `}</style>
 
-      {/* Animated background particles */}
-      <div className="absolute inset-0 overflow-hidden">
-        {[...Array(20)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute rounded-full bg-white opacity-20"
-            style={{
-              width: `${Math.random() * 100 + 50}px`,
-              height: `${Math.random() * 100 + 50}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animation: `floatSlow ${Math.random() * 60 + 120}s ease-in-out infinite`,
-              animationDelay: `${Math.random() * 10}s`
-            }}
-          />
-        ))}
-      </div>
+      {/* Soft brand-green glow orbs */}
+      <div
+        className="absolute rounded-full"
+        style={{
+          width: '55vw', height: '55vw',
+          top: '-20vw', right: '-15vw',
+          background: 'radial-gradient(circle, rgba(37,190,3,0.14) 0%, transparent 65%)',
+          animation: 'ss-drift1 26s ease-in-out infinite',
+        }}
+      />
+      <div
+        className="absolute rounded-full"
+        style={{
+          width: '45vw', height: '45vw',
+          bottom: '-18vw', left: '-12vw',
+          background: 'radial-gradient(circle, rgba(42,170,138,0.12) 0%, transparent 65%)',
+          animation: 'ss-drift2 32s ease-in-out infinite',
+        }}
+      />
 
-      <div className="text-center text-white relative z-10 animate-fadeIn">
-        {/* Logo with enhanced animation */}
-        <div className="mb-8 animate-float">
-          <div className="relative inline-block">
-            <div
-              className="absolute inset-0 rounded-lg blur-xl opacity-50"
-              style={{
-                background: 'radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)',
-                animation: 'pulse 3s ease-in-out infinite'
-              }}
-            />
-            <img
-              src="/motor.jpeg"
-              alt="MotorGas Logo"
-              className="h-32 w-auto mx-auto rounded-lg shadow-2xl relative z-10 p-4 bg-white"
-              style={{
-                filter: 'drop-shadow(0 10px 30px rgba(0, 0, 0, 0.3))',
-                animation: 'float 4s ease-in-out infinite'
-              }}
-            />
+      <div className="relative z-10 flex flex-col items-center text-white px-6" style={{ animation: 'ss-fadeIn 0.9s ease-out both' }}>
+
+        {/* Logo */}
+        <div className="mb-8" style={{ animation: 'ss-rise 0.9s ease-out 0.1s both' }}>
+          <div className="bg-white rounded-3xl px-8 py-6 shadow-2xl" style={{ boxShadow: '0 0 80px rgba(37,190,3,0.25), 0 25px 50px rgba(0,0,0,0.5)' }}>
+            <img src="/motor.jpeg" alt="MotorGas Africa" className="h-20 w-auto object-contain" />
           </div>
         </div>
 
-        {/* Company Name with glow effect */}
-        <h1 
-          className="text-5xl font-bold mb-4 animate-glow" 
-          style={{ 
-            textShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-            background: 'linear-gradient(90deg, #ffffff 0%, #f0f0f0 50%, #ffffff 100%)',
-            backgroundSize: '200% 100%',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            animation: 'shimmer 3s linear infinite, glow 2s ease-in-out infinite'
-          }}
-        >
-          MotorGas Technologies
+        {/* Company name */}
+        <h1 className="text-3xl font-bold tracking-[0.3em] uppercase mb-1" style={{ animation: 'ss-rise 0.9s ease-out 0.2s both' }}>
+          MotorGas <span className="text-green-400">Africa</span>
         </h1>
-
-        {/* Time with slide in animation */}
-        <div 
-          className="text-5xl font-light mb-2 animate-slideInUp" 
-          style={{ 
-            textShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
-            fontFamily: 'monospace',
-            letterSpacing: '0.1em'
-          }}
-        >
-          {formatTime(currentTime)}
-        </div>
-
-        {/* Date with slide in animation */}
-        <div 
-          className="text-2xl font-light mb-8 animate-slideInDown" 
-          style={{ 
-            textShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
-            opacity: 0.9
-          }}
-        >
-          {formatDate(currentTime)}
-        </div>
-
-        {/* Instruction with pulse animation */}
-        <div 
-          className="text-4xl font-light animate-pulse-slow opacity-80" 
-          style={{ 
-            textShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
-            animation: 'pulse 2s ease-in-out infinite, slideInUp 1s ease-out 0.7s both'
-          }}
-        >
+        <p className="text-sm text-white/40 tracking-[0.2em] uppercase mb-10" style={{ animation: 'ss-rise 0.9s ease-out 0.3s both' }}>
           Transforming Mobility in Africa
+        </p>
+
+        {/* Clock */}
+        <div className="flex items-baseline gap-3 mb-2" style={{ animation: 'ss-rise 0.9s ease-out 0.4s both' }}>
+          <span className="text-[7rem] leading-none font-extralight tabular-nums tracking-tight">
+            {time}
+          </span>
+          <span className="text-3xl font-light text-green-400 tabular-nums" style={{ animation: 'ss-blink 2s ease-in-out infinite' }}>
+            {seconds}
+          </span>
+        </div>
+
+        {/* Date */}
+        <p className="text-lg font-light text-white/60 mb-14" style={{ animation: 'ss-rise 0.9s ease-out 0.5s both' }}>
+          {date}
+        </p>
+
+        {/* Dismiss hint */}
+        <div
+          className="flex items-center gap-2 text-xs text-white/50 tracking-widest uppercase border border-white/15 rounded-full px-5 py-2.5"
+          style={{ animation: 'ss-hint 2.6s ease-in-out infinite, ss-rise 0.9s ease-out 0.6s both' }}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+          Click anywhere to continue
         </div>
       </div>
     </div>
@@ -219,4 +121,3 @@ const Screensaver: React.FC<ScreensaverProps> = ({ isActive, onDismiss }) => {
 }
 
 export default Screensaver
-

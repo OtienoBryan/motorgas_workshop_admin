@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { adminApiService, JobCard } from '../services/api'
 import JobCardInvoiceDocument from '../components/JobCardInvoiceDocument'
 import { exportElementToPdf } from '../utils/pdf'
+import { ESTIMATE_STAGE_STATUSES } from './JobCardForm'
 import { ChevronLeft, Printer, Download, Loader2 } from 'lucide-react'
 
 const JobCardInvoice: React.FC = () => {
@@ -21,11 +22,16 @@ const JobCardInvoice: React.FC = () => {
       .finally(() => setLoading(false))
   }, [id])
 
+  const isQuotation = jobCard ? ESTIMATE_STAGE_STATUSES.includes(jobCard.status) : false
+  const docLabel = isQuotation ? 'Quotation' : 'Invoice'
+
   const handleExportPdf = async () => {
-    if (!documentRef.current || !jobCard) return
+    const target = documentRef.current?.querySelector('.invoice-printable') as HTMLElement | null
+    if (!target || !jobCard) return
     try {
       setExporting(true)
-      await exportElementToPdf(documentRef.current, `Invoice-${jobCard.id}.pdf`)
+      const clientName = jobCard.conversionClient?.name?.trim().replace(/[^a-zA-Z0-9]+/g, '-') || 'Client'
+      await exportElementToPdf(target, `${docLabel}-${clientName}-${jobCard.id}.pdf`)
     } catch (err) {
       alert('Failed to export PDF')
     } finally {
@@ -81,7 +87,7 @@ const JobCardInvoice: React.FC = () => {
             onClick={() => window.print()}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
           >
-            <Printer className="h-4 w-4" /> Print Invoice
+            <Printer className="h-4 w-4" /> Print {docLabel}
           </button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { adminApiService } from '../services/api'
+import { adminApiService, JobCard } from '../services/api'
 import {
   ChevronLeft,
   Loader2,
@@ -14,22 +14,19 @@ import {
   MapPin,
   Car,
   ArrowRight,
-  X,
   Info,
   FileText,
-  Wrench
+  Wrench,
+  MessageSquare,
+  Settings2,
+  ShieldOff,
+  Percent,
+  Tags,
+  CalendarClock,
+  ClipboardCheck,
 } from 'lucide-react'
-
-interface Client {
-  id: number
-  name: string
-  email?: string
-  contact: string
-  address?: string
-  region: string
-  category: 'individual' | 'company'
-  taxPin?: string
-}
+import { Client, mapConversionClient } from './Clients'
+import { ESTIMATE_STAGE_STATUSES, STATUS_STYLES as JOB_STATUS_STYLES, STATUS_LABELS as JOB_STATUS_LABELS } from './JobCardForm'
 
 interface Vehicle {
   id: number
@@ -82,13 +79,15 @@ const ClientDetails: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loadingClient, setLoadingClient] = useState(true)
   const [loadingVehicles, setLoadingVehicles] = useState(true)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'information' | 'vehicles' | 'invoices' | 'service'>('information')
+  const [activeTab, setActiveTab] = useState<'information' | 'vehicles' | 'invoices' | 'service' | 'quotations'>('information')
+  const [jobCards, setJobCards] = useState<JobCard[]>([])
+  const [loadingJobCards, setLoadingJobCards] = useState(true)
 
   useEffect(() => {
     if (clientId) {
       fetchClient(Number(clientId))
       fetchVehicles(Number(clientId))
+      fetchJobCards(Number(clientId))
     }
   }, [clientId])
 
@@ -97,16 +96,7 @@ const ClientDetails: React.FC = () => {
       setLoadingClient(true)
       const data = await adminApiService.getConversionClient(id)
       if (data) {
-        setClient({
-          id: data.id,
-          name: data.name,
-          email: data.email || undefined,
-          contact: data.contact,
-          address: data.address || undefined,
-          region: data.region || '',
-          category: (data.category as 'individual' | 'company') || 'individual',
-          taxPin: data.tax_pin || undefined
-        })
+        setClient(mapConversionClient(data))
       }
     } catch (error) {
       console.error('Error fetching client:', error)
@@ -128,19 +118,18 @@ const ClientDetails: React.FC = () => {
     }
   }
 
-  const handleSave = async (clientData: Partial<Client>) => {
-    if (!client) return
-    await adminApiService.updateConversionClient(client.id, {
-      name: clientData.name || '',
-      email: clientData.email || '',
-      contact: clientData.contact || '',
-      category: clientData.category || 'individual',
-      tax_pin: clientData.taxPin || '',
-      address: clientData.address || '',
-      region: clientData.region || '',
-      is_active: 1
-    })
-    await fetchClient(client.id)
+  const fetchJobCards = async (id: number) => {
+    try {
+      setLoadingJobCards(true)
+      const data = await adminApiService.getJobCards()
+      const clientJobCards = (Array.isArray(data) ? data : []).filter(jc => jc.conversion_client_id === id)
+      setJobCards(clientJobCards)
+    } catch (error) {
+      console.error('Error fetching job cards:', error)
+      setJobCards([])
+    } finally {
+      setLoadingJobCards(false)
+    }
   }
 
   if (loadingClient) {
@@ -164,6 +153,8 @@ const ClientDetails: React.FC = () => {
   }
 
   const isCompany = client.category === 'company'
+  const quotations = jobCards.filter(jc => ESTIMATE_STAGE_STATUSES.includes(jc.status))
+  const invoices = jobCards.filter(jc => !ESTIMATE_STAGE_STATUSES.includes(jc.status))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -183,7 +174,7 @@ const ClientDetails: React.FC = () => {
               Clients
             </button>
             <button
-              onClick={() => setIsEditModalOpen(true)}
+              onClick={() => navigate(`/clients/${client.id}/edit`)}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-white/15 hover:bg-white/25 rounded-lg backdrop-blur transition-colors"
             >
               <Edit className="h-3 w-3" />
@@ -232,7 +223,10 @@ const ClientDetails: React.FC = () => {
             { id: 'information', label: 'Information', icon: <Info className="h-3.5 w-3.5" /> },
             { id: 'vehicles',    label: 'Vehicles',    icon: <Car className="h-3.5 w-3.5" />,
               badge: loadingVehicles ? undefined : vehicles.length },
-            { id: 'invoices',    label: 'Invoices',    icon: <FileText className="h-3.5 w-3.5" /> },
+            { id: 'invoices',    label: 'Invoices',    icon: <FileText className="h-3.5 w-3.5" />,
+              badge: loadingJobCards ? undefined : invoices.length },
+            { id: 'quotations',  label: 'Quotations',  icon: <ClipboardCheck className="h-3.5 w-3.5" />,
+              badge: loadingJobCards ? undefined : quotations.length },
             { id: 'service',     label: 'Service',     icon: <Wrench className="h-3.5 w-3.5" /> },
           ] as const).map(tab => (
             <button
@@ -263,24 +257,61 @@ const ClientDetails: React.FC = () => {
 
         {/* Information */}
         {activeTab === 'information' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-50">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Contact Information</h2>
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-50">
+                <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Contact Information</h2>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-y divide-gray-50">
+                <InfoCell icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={client.contact} />
+                {client.email
+                  ? <InfoCell icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={client.email} />
+                  : <InfoCell icon={<Mail className="h-3.5 w-3.5" />} label="Email" value="—" muted />
+                }
+                {client.region
+                  ? <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Region" value={client.region} />
+                  : <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Region" value="—" muted />
+                }
+                {client.address
+                  ? <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Address" value={client.address} />
+                  : <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Address" value="—" muted />
+                }
+              </div>
             </div>
-            <div className="grid grid-cols-2 divide-x divide-y divide-gray-50">
-              <InfoCell icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={client.contact} />
-              {client.email
-                ? <InfoCell icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={client.email} />
-                : <InfoCell icon={<Mail className="h-3.5 w-3.5" />} label="Email" value="—" muted />
-              }
-              {client.region
-                ? <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Region" value={client.region} />
-                : <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Region" value="—" muted />
-              }
-              {client.address
-                ? <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Address" value={client.address} />
-                : <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Address" value="—" muted />
-              }
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-2">
+                <MessageSquare className="h-3.5 w-3.5 text-gray-400" />
+                <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">How did you find us?</h2>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-y divide-gray-50">
+                {client.referralSource
+                  ? <InfoCell icon={<Info className="h-3.5 w-3.5" />} label="Source" value={client.referralSource} />
+                  : <InfoCell icon={<Info className="h-3.5 w-3.5" />} label="Source" value="—" muted />
+                }
+                {client.referralNotes
+                  ? <InfoCell icon={<FileText className="h-3.5 w-3.5" />} label="Notes" value={client.referralNotes} />
+                  : <InfoCell icon={<FileText className="h-3.5 w-3.5" />} label="Notes" value="—" muted />
+                }
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-2">
+                <Settings2 className="h-3.5 w-3.5 text-gray-400" />
+                <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Settings</h2>
+              </div>
+              <div className="divide-y divide-gray-50">
+                <SettingRow icon={<ShieldOff className="h-3.5 w-3.5" />} label="Tax Exempt" enabled={!!client.taxExempt} />
+                <SettingRow icon={<Percent className="h-3.5 w-3.5" />} label="Apply Discount" enabled={!!client.applyDiscount}
+                  value={client.applyDiscount && client.discountRate ? `${client.discountRate}%` : undefined} />
+                <SettingRow icon={<Wrench className="h-3.5 w-3.5" />} label="Labour Rate Override" enabled={!!client.labourRateOverride}
+                  value={client.labourRateOverride && client.labourRate ? client.labourRate : undefined} />
+                <SettingRow icon={<Tags className="h-3.5 w-3.5" />} label="Parts Markup Override" enabled={!!client.partsMarkupOverride}
+                  value={client.partsMarkupOverride && client.partsMarkup ? `${client.partsMarkup}%` : undefined} />
+                <SettingRow icon={<CalendarClock className="h-3.5 w-3.5" />} label="Payment Terms Override" enabled={!!client.paymentTermsOverride}
+                  value={client.paymentTermsOverride && client.paymentTerms ? client.paymentTerms : undefined} />
+              </div>
             </div>
           </div>
         )}
@@ -391,14 +422,201 @@ const ClientDetails: React.FC = () => {
           </div>
         )}
 
-        {/* Invoices — placeholder */}
+        {/* Invoices */}
         {activeTab === 'invoices' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-14 text-center">
-            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-2">
-              <FileText className="h-5 w-5 text-gray-300" />
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50">
+              <h2 className="text-xs font-semibold text-gray-700">Invoices</h2>
+              {!loadingJobCards && (
+                <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-medium">
+                  {invoices.length}
+                </span>
+              )}
             </div>
-            <p className="text-xs font-medium text-gray-500">No invoices yet</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">Invoices for this client will appear here</p>
+
+            {loadingJobCards ? (
+              <div className="flex items-center justify-center h-24">
+                <Loader2 className="h-5 w-5 animate-spin text-green-600" />
+              </div>
+            ) : invoices.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-2">
+                  <FileText className="h-5 w-5 text-gray-300" />
+                </div>
+                <p className="text-xs text-gray-400">No invoices yet</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">Invoices for this client will appear here</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-50">
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Invoice #</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Vehicle</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Date</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Status</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Amount</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Amount Paid</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Balance</th>
+                      <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {invoices.map(jc => {
+                      const items = jc.items || []
+                      const subtotal = items.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+                      const taxable = items.filter(i => i.taxable !== 0).reduce((sum, i) => sum + Number(i.amount || 0), 0)
+                      const vat = jc.vat_enabled ? taxable * (Number(jc.vat_rate) / 100) : 0
+                      const total = subtotal + vat - Number(jc.discount || 0) + Number(jc.other_charges || 0)
+                      const amountPaid = Number(jc.amount_paid || 0)
+                      const balance = total - amountPaid
+                      const money = (n: number) => `Ksh${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      return (
+                        <tr
+                          key={jc.id}
+                          onClick={() => navigate(`/job-cards/${jc.id}/invoice`)}
+                          className="group cursor-pointer hover:bg-gray-50 transition-colors"
+                        >
+                          <td className="px-4 py-3">
+                            <span className="font-mono text-xs font-semibold text-gray-800 bg-gray-100 px-2 py-1 rounded-md">
+                              INV-{String(jc.id).padStart(4, '0')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-700">
+                            {jc.conversionVehicle
+                              ? `${jc.conversionVehicle.make ?? ''} ${jc.conversionVehicle.model}`.trim()
+                              : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                            {new Date(jc.created_at).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${JOB_STATUS_STYLES[jc.status] || 'bg-gray-100 text-gray-500'}`}>
+                              {JOB_STATUS_LABELS[jc.status] || jc.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-semibold text-gray-900 whitespace-nowrap">
+                            {money(total)}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap">
+                            {money(amountPaid)}
+                          </td>
+                          <td className={`px-4 py-3 text-xs font-medium whitespace-nowrap ${balance > 0 ? 'text-red-600' : 'text-gray-700'}`}>
+                            {money(balance)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <ArrowRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-green-500 transition-colors ml-auto" />
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Quotations */}
+        {activeTab === 'quotations' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs font-semibold text-gray-700">Quotations</h2>
+                {!loadingJobCards && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-medium">
+                    {quotations.length}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => navigate('/job-cards/new', { state: { clientId: client.id } })}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New Quotation
+              </button>
+            </div>
+
+            {loadingJobCards ? (
+              <div className="flex items-center justify-center h-24">
+                <Loader2 className="h-5 w-5 animate-spin text-green-600" />
+              </div>
+            ) : quotations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-2">
+                  <ClipboardCheck className="h-5 w-5 text-gray-300" />
+                </div>
+                <p className="text-xs text-gray-400">No quotations yet</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-50">
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Quotation #</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Vehicle</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Date</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Status</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Amount</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Amount Paid</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Balance</th>
+                      <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {quotations.map(jc => {
+                      const items = jc.items || []
+                      const subtotal = items.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+                      const taxable = items.filter(i => i.taxable !== 0).reduce((sum, i) => sum + Number(i.amount || 0), 0)
+                      const vat = jc.vat_enabled ? taxable * (Number(jc.vat_rate) / 100) : 0
+                      const total = subtotal + vat - Number(jc.discount || 0) + Number(jc.other_charges || 0)
+                      const amountPaid = Number(jc.amount_paid || 0)
+                      const balance = total - amountPaid
+                      const money = (n: number) => `Ksh${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      return (
+                        <tr
+                          key={jc.id}
+                          onClick={() => navigate(`/job-cards/${jc.id}`)}
+                          className="group cursor-pointer hover:bg-gray-50 transition-colors"
+                        >
+                          <td className="px-4 py-3">
+                            <span className="font-mono text-xs font-semibold text-gray-800 bg-gray-100 px-2 py-1 rounded-md">
+                              QT-{String(jc.id).padStart(4, '0')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-700">
+                            {jc.conversionVehicle
+                              ? `${jc.conversionVehicle.make ?? ''} ${jc.conversionVehicle.model}`.trim()
+                              : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                            {new Date(jc.created_at).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${JOB_STATUS_STYLES[jc.status] || 'bg-gray-100 text-gray-500'}`}>
+                              {JOB_STATUS_LABELS[jc.status] || jc.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-semibold text-gray-900 whitespace-nowrap">
+                            {money(total)}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap">
+                            {money(amountPaid)}
+                          </td>
+                          <td className={`px-4 py-3 text-xs font-medium whitespace-nowrap ${balance > 0 ? 'text-red-600' : 'text-gray-700'}`}>
+                            {money(balance)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <ArrowRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-green-500 transition-colors ml-auto" />
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
@@ -414,15 +632,6 @@ const ClientDetails: React.FC = () => {
         )}
 
       </div>
-
-      {isEditModalOpen && (
-        <EditClientModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          client={client}
-          onSave={handleSave}
-        />
-      )}
     </div>
   )
 }
@@ -445,120 +654,29 @@ const InfoCell: React.FC<InfoCellProps> = ({ icon, label, value, muted }) => (
   </div>
 )
 
-/* ── Edit modal ── */
-interface EditClientModalProps {
-  isOpen: boolean
-  onClose: () => void
-  client: Client
-  onSave: (data: Partial<Client>) => Promise<void>
+/* ── Setting row used in the Settings card ── */
+interface SettingRowProps {
+  icon: React.ReactNode
+  label: string
+  enabled: boolean
+  value?: string
 }
 
-const EditClientModal: React.FC<EditClientModalProps> = ({ isOpen, onClose, client, onSave }) => {
-  const [formData, setFormData] = useState<Partial<Client>>({
-    name: client.name,
-    email: client.email || '',
-    contact: client.contact,
-    address: client.address || '',
-    region: client.region,
-    category: client.category,
-    taxPin: client.taxPin || ''
-  })
-  const [saving, setSaving] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      setSaving(true)
-      await onSave(formData)
-      onClose()
-    } catch (error) {
-      alert(`Failed to save: ${(error as any).message || 'Unknown error'}`)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-  }
-
-  if (!isOpen) return null
-
-  const field = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none'
-  const label = 'block text-xs font-medium text-gray-600 mb-1'
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-900">Edit Client</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-3">
-          <div>
-            <label className={label}>Client Type</label>
-            <select
-              name="category"
-              value={formData.category || 'individual'}
-              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value as 'individual' | 'company' }))}
-              className={field}
-            >
-              <option value="individual">Individual</option>
-              <option value="company">Company</option>
-            </select>
-          </div>
-
-          <div>
-            <label className={label}>{formData.category === 'company' ? 'Company Name' : 'Full Name'} *</label>
-            <input type="text" name="name" value={formData.name || ''} onChange={handleChange} required className={field} placeholder="Enter name" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={label}>Contact *</label>
-              <input type="text" name="contact" value={formData.contact || ''} onChange={handleChange} required className={field} placeholder="+254..." />
-            </div>
-            <div>
-              <label className={label}>Email</label>
-              <input type="email" name="email" value={formData.email || ''} onChange={handleChange} className={field} placeholder="optional" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={label}>Tax PIN</label>
-              <input type="text" name="taxPin" value={formData.taxPin || ''} onChange={handleChange} className={field} placeholder="optional" />
-            </div>
-            <div>
-              <label className={label}>Region</label>
-              <input type="text" name="region" value={formData.region || ''} onChange={handleChange} className={field} placeholder="e.g. Nairobi" />
-            </div>
-          </div>
-
-          <div>
-            <label className={label}>Address</label>
-            <textarea name="address" value={formData.address || ''} onChange={handleChange} rows={2}
-              className={field + ' resize-none'} placeholder="Street address..." />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-            <button type="button" onClick={onClose} disabled={saving}
-              className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {saving ? 'Saving…' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </div>
+const SettingRow: React.FC<SettingRowProps> = ({ icon, label, enabled, value }) => (
+  <div className="flex items-center justify-between px-4 py-2.5">
+    <div className="flex items-center gap-2.5 text-gray-700">
+      <span className="text-gray-300 shrink-0">{icon}</span>
+      <span className="text-xs font-medium">{label}</span>
     </div>
-  )
-}
+    <div className="flex items-center gap-2">
+      {enabled && value && <span className="text-xs font-mono text-gray-600">{value}</span>}
+      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+        enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'
+      }`}>
+        {enabled ? 'Enabled' : 'Disabled'}
+      </span>
+    </div>
+  </div>
+)
 
 export default ClientDetails

@@ -22,10 +22,11 @@ const InspectionDetails: React.FC = () => {
   }, [inspectionId])
 
   const handleExportPdf = async () => {
-    if (!documentRef.current || !inspection) return
+    const target = documentRef.current?.querySelector('.inspection-printable') as HTMLElement | null
+    if (!target || !inspection) return
     try {
       setExporting(true)
-      await exportElementToPdf(documentRef.current, `Inspection-${inspection.id}.pdf`)
+      await exportElementToPdf(target, `Inspection-${inspection.id}.pdf`)
     } catch (err) {
       alert('Failed to export PDF')
     } finally {

@@ -347,6 +347,17 @@ export interface ConversionClient {
   region: string | null
   category: 'individual' | 'company'
   tax_pin: string | null
+  referral_source?: string | null
+  referral_notes?: string | null
+  tax_exempt?: number
+  apply_discount?: number
+  discount_rate?: string | number | null
+  labour_rate_override?: number
+  labour_rate?: string | number | null
+  parts_markup_override?: number
+  parts_markup?: string | number | null
+  payment_terms_override?: number
+  payment_terms?: string | null
   account_number: string
   is_active: number
   created_at: string
@@ -387,13 +398,20 @@ export interface ConversionVehicle {
   transmission_type?: string
   driven_wheel?: string
   engine?: string
+  engine_capacity?: string
+  engine_code?: string
   current_odo?: number
   odo_unit: 'KM' | 'Miles'
   color?: string
   unit_number?: string
+  tank_capacity?: string
+  telemetry_status?: string
   notes?: string
   photo_url?: string
   photo_urls?: string[]
+  vsa_url?: string
+  logbook_url?: string
+  labels?: string[]
   created_at: string
   updated_at: string
   conversionClient?: ConversionClient
@@ -533,7 +551,7 @@ export interface JobCard {
   id: number
   conversion_client_id?: number | null
   conversion_vehicle_id?: number | null
-  status: 'open' | 'in_progress' | 'completed' | 'closed'
+  status: 'open' | 'sent' | 'approved' | 'not_paid' | 'paid' | 'warranty' | 'special_order' | 'written_off' | 'voided'
   vat_enabled: number
   vat_rate: number
   discount: number
@@ -558,6 +576,22 @@ export interface VehicleInspection {
   checklist?: string | null
   issues_found?: number
   technician?: Staff
+  conversionClient?: ConversionClient
+  conversionVehicle?: ConversionVehicle
+  created_at: string
+  updated_at: string
+}
+
+export interface Appointment {
+  id: number
+  title: string
+  description?: string | null
+  location?: string | null
+  appointment_date: string
+  end_date?: string | null
+  conversion_client_id?: number | null
+  conversion_vehicle_id?: number | null
+  status: 'scheduled' | 'completed' | 'cancelled'
   conversionClient?: ConversionClient
   conversionVehicle?: ConversionVehicle
   created_at: string
@@ -2780,6 +2814,18 @@ class AdminApiService {
     })
   }
 
+  async convertJobCardToInvoice(id: number, data: { update_inventory: boolean; store_id?: number }): Promise<JobCard> {
+    console.log('🧾 [API] convertJobCardToInvoice called for job card:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return { id, status: 'not_paid' } as JobCard
+    }
+    return this.request<JobCard>(`/job-cards/${id}/convert-to-invoice`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
   // Vehicle Inspections
   async getVehicleInspections(conversionVehicleId: number): Promise<VehicleInspection[]> {
     console.log('🔍 [API] getVehicleInspections called for vehicle:', conversionVehicleId)
@@ -2823,6 +2869,60 @@ class AdminApiService {
       return
     }
     return this.request<void>(`/vehicle-inspections/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
+  // Appointments
+  async getAppointments(): Promise<Appointment[]> {
+    console.log('📅 [API] getAppointments called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return []
+    }
+    return this.request<Appointment[]>('/appointments')
+  }
+
+  async createAppointment(data: Partial<Appointment>): Promise<Appointment> {
+    console.log('📅 [API] createAppointment called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id: Date.now(),
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as Appointment
+    }
+    return this.request<Appointment>('/appointments', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async updateAppointment(id: number, data: Partial<Appointment>): Promise<Appointment> {
+    console.log('📅 [API] updateAppointment called for appointment:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id,
+        ...data,
+        updated_at: new Date().toISOString()
+      } as Appointment
+    }
+    return this.request<Appointment>(`/appointments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteAppointment(id: number): Promise<void> {
+    console.log('📅 [API] deleteAppointment called for appointment:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return
+    }
+    return this.request<void>(`/appointments/${id}`, {
       method: 'DELETE'
     })
   }

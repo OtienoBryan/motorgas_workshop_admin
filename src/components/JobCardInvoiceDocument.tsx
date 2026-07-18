@@ -1,12 +1,12 @@
 import React from 'react'
 import { JobCard } from '../services/api'
+import { ESTIMATE_STAGE_STATUSES } from '../pages/JobCardForm'
 
 export const COMPANY = {
   name: 'MOTORGAS AFRICA',
   phones: '0780600257 / 0702334976',
   emails: 'info@motorgas.africa · motorgasltd@gmail.com',
   website: 'motorgas.co.ke',
-  about: 'MOTORGAS AFRICA is a leading East African company registered in Kenya, specializing in liquefied petroleum gas (LPG) and compressed natural gas (CNG) solutions. The company is a multidisciplinary expert in the auto gas conversion, LPG, CNG and conversion industries.',
   paybill: '630640',
   account: '573401',
   accountName: 'MOTORGAS LIMITED',
@@ -42,6 +42,8 @@ const JobCardInvoiceDocument: React.FC<JobCardInvoiceDocumentProps> = ({ jobCard
   const client = jobCard.conversionClient
   const vehicle = jobCard.conversionVehicle
   const invoiceDate = new Date(jobCard.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  const isQuotation = ESTIMATE_STAGE_STATUSES.includes(jobCard.status)
+  const docLabel = isQuotation ? 'QUOTATION' : 'INVOICE'
 
   return (
     <div className={`bg-white border border-gray-200 rounded-2xl overflow-hidden ${className || ''}`}>
@@ -56,11 +58,10 @@ const JobCardInvoiceDocument: React.FC<JobCardInvoiceDocumentProps> = ({ jobCard
             <p className="text-xs text-gray-500 mt-1.5">{COMPANY.phones}</p>
             <p className="text-xs text-gray-500">{COMPANY.emails}</p>
             <p className="text-xs text-gray-500 mb-2">{COMPANY.website}</p>
-            <p className="text-[11px] text-gray-400 leading-relaxed">{COMPANY.about}</p>
           </div>
           <div className="flex flex-col items-end shrink-0">
-            <img src="/motor.jpeg" alt="MotorGas" className="h-14 object-contain mb-2" />
-            <h2 className="text-xl font-bold text-green-700 tracking-wide">INVOICE</h2>
+            <img src="/motor.jpeg" alt="MotorGas" className="h-24 object-contain mb-2" />
+            <h2 className="text-xl font-bold text-green-700 tracking-wide">{docLabel}</h2>
             <p className="text-xs text-gray-400 font-mono">#{jobCard.id}</p>
           </div>
         </div>
@@ -84,7 +85,7 @@ const JobCardInvoiceDocument: React.FC<JobCardInvoiceDocumentProps> = ({ jobCard
             {vehicle?.vin_serial_number && <p className="text-[11px] font-mono text-gray-400">{vehicle.vin_serial_number}</p>}
           </div>
           <div className="text-right">
-            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Invoice Date</p>
+            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{isQuotation ? 'Quotation Date' : 'Invoice Date'}</p>
             <p className="text-xs font-semibold text-gray-900">{invoiceDate}</p>
             <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mt-3 mb-1.5">Status</p>
             <p className="text-xs font-semibold text-gray-900 capitalize">{jobCard.status.replace('_', ' ')}</p>
@@ -156,11 +157,11 @@ const JobCardInvoiceDocument: React.FC<JobCardInvoiceDocumentProps> = ({ jobCard
               <span>Labor</span><span>{money(fin.laborSubtotal)}</span>
             </div>
             <div className="flex items-center justify-between text-xs text-gray-500 pt-1.5 border-t border-gray-100">
-              <span>Subtotal</span><span>{money(fin.subtotal)}</span>
+              <span>Subtotal (Exclusive)</span><span>{money(fin.subtotal)}</span>
             </div>
             {jobCard.vat_enabled ? (
               <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>VAT ({jobCard.vat_rate}%)</span><span>{money(fin.vatAmount)}</span>
+                <span>VAT ({jobCard.vat_rate}%, Exclusive)</span><span>{money(fin.vatAmount)}</span>
               </div>
             ) : null}
             {fin.discount > 0 && (
@@ -188,10 +189,6 @@ const JobCardInvoiceDocument: React.FC<JobCardInvoiceDocumentProps> = ({ jobCard
         {/* Footer: signatures + payment info */}
         <div className="grid grid-cols-2 gap-8 mt-14 pt-6 border-t border-gray-100">
           <div className="space-y-8">
-            <div>
-              <div className="border-b border-gray-300 h-8" />
-              <p className="text-[10px] text-gray-400 mt-1">Technician Signature</p>
-            </div>
             <div>
               <div className="border-b border-gray-300 h-8" />
               <p className="text-[10px] text-gray-400 mt-1">Customer Signature</p>

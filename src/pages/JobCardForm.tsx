@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { adminApiService, ConversionClient, ConversionVehicle, Part, Service, JobCardItem, Staff } from '../services/api'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { adminApiService, ConversionClient, ConversionVehicle, Part, Service, JobCardItem, Staff, Store } from '../services/api'
 import {
   ChevronLeft,
   User,
@@ -18,17 +18,59 @@ import {
   CheckCircle2,
   UserCog,
   FileText,
+  ArrowRightLeft,
 } from 'lucide-react'
 
 interface ItemDraft extends JobCardItem {
   key: string
 }
 
-const STATUS_OPTIONS: { value: 'open' | 'in_progress' | 'completed' | 'closed'; label: string }[] = [
+export type JobStatus = 'open' | 'sent' | 'approved' | 'not_paid' | 'paid' | 'warranty' | 'special_order' | 'written_off' | 'voided'
+
+export const STATUS_OPTIONS: { value: JobStatus; label: string }[] = [
   { value: 'open', label: 'Open' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'closed', label: 'Closed' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'not_paid', label: 'Not Paid' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'warranty', label: 'Warranty' },
+  { value: 'special_order', label: 'Special Order' },
+  { value: 'written_off', label: 'Written Off' },
+  { value: 'voided', label: 'Voided' },
+]
+
+export const STATUS_STYLES: Record<JobStatus, string> = {
+  open: 'bg-blue-100 text-blue-700',
+  sent: 'bg-indigo-100 text-indigo-700',
+  approved: 'bg-violet-100 text-violet-700',
+  not_paid: 'bg-red-100 text-red-700',
+  paid: 'bg-emerald-100 text-emerald-700',
+  warranty: 'bg-amber-100 text-amber-700',
+  special_order: 'bg-cyan-100 text-cyan-700',
+  written_off: 'bg-gray-200 text-gray-600',
+  voided: 'bg-gray-100 text-gray-400',
+}
+
+export const STATUS_LABELS: Record<JobStatus, string> = {
+  open: 'Open',
+  sent: 'Sent',
+  approved: 'Approved',
+  not_paid: 'Not Paid',
+  paid: 'Paid',
+  warranty: 'Warranty',
+  special_order: 'Special Order',
+  written_off: 'Written Off',
+  voided: 'Voided',
+}
+
+export const ESTIMATE_STAGE_STATUSES: JobStatus[] = ['open', 'sent', 'approved']
+
+type TaxOption = 'standard' | 'exempt' | 'zero'
+
+const TAX_OPTIONS: { value: TaxOption; label: string; rate: number }[] = [
+  { value: 'standard', label: '16%', rate: 16 },
+  { value: 'exempt', label: 'Exempted', rate: 0 },
+  { value: 'zero', label: 'Zero Rated', rate: 0 },
 ]
 
 let keySeq = 0
@@ -36,6 +78,7 @@ const newKey = () => `item-${Date.now()}-${keySeq++}`
 
 const JobCardForm: React.FC = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { id } = useParams<{ id?: string }>()
   const isEditing = !!id && id !== 'new'
 
@@ -50,11 +93,12 @@ const JobCardForm: React.FC = () => {
 
   const [clientId, setClientId] = useState<number | null>(null)
   const [vehicleId, setVehicleId] = useState<number | null>(null)
-  const [status, setStatus] = useState<'open' | 'in_progress' | 'completed' | 'closed'>('open')
+  const [status, setStatus] = useState<JobStatus>('open')
   const [notes, setNotes] = useState('')
-  const [vatEnabled, setVatEnabled] = useState(false)
-  const [vatRate, setVatRate] = useState(16)
+  const [taxOption, setTaxOption] = useState<TaxOption>('standard')
+  const vatRate = TAX_OPTIONS.find(o => o.value === taxOption)?.rate ?? 0
   const [discount, setDiscount] = useState(0)
+  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed')
   const [otherCharges, setOtherCharges] = useState(0)
   const [amountPaid, setAmountPaid] = useState(0)
   const [items, setItems] = useState<ItemDraft[]>([])
@@ -65,6 +109,13 @@ const JobCardForm: React.FC = () => {
   const [partDropdownOpen, setPartDropdownOpen] = useState(false)
   const [laborSearch, setLaborSearch] = useState('')
   const [laborDropdownOpen, setLaborDropdownOpen] = useState(false)
+
+  const [convertModalOpen, setConvertModalOpen] = useState(false)
+  const [converting, setConverting] = useState(false)
+  const [updateInventoryChoice, setUpdateInventoryChoice] = useState(true)
+  const [stores, setStores] = useState<Store[]>([])
+  const [loadingStores, setLoadingStores] = useState(false)
+  const [selectedStoreId, setSelectedStoreId] = useState('')
 
   const partRef = useRef<HTMLDivElement>(null)
   const laborRef = useRef<HTMLDivElement>(null)
@@ -77,6 +128,13 @@ const JobCardForm: React.FC = () => {
   }, [])
 
   useEffect(() => {
+    if (isEditing) return
+    const state = location.state as { clientId?: number; vehicleId?: number } | null
+    if (state?.clientId) setClientId(state.clientId)
+    if (state?.vehicleId) setVehicleId(state.vehicleId)
+  }, [isEditing, location.state])
+
+  useEffect(() => {
     if (!isEditing) return
     const fetchJobCard = async () => {
       try {
@@ -86,8 +144,7 @@ const JobCardForm: React.FC = () => {
         setVehicleId(jc.conversion_vehicle_id ?? null)
         setStatus(jc.status)
         setNotes(jc.notes || '')
-        setVatEnabled(!!jc.vat_enabled)
-        setVatRate(Number(jc.vat_rate))
+        setTaxOption(Number(jc.vat_rate) === 16 ? 'standard' : 'zero')
         setDiscount(Number(jc.discount))
         setOtherCharges(Number(jc.other_charges))
         setAmountPaid(Number(jc.amount_paid))
@@ -148,9 +205,15 @@ const JobCardForm: React.FC = () => {
   }
 
   const addCustomPartItem = () => {
+    const key = newKey()
     setItems(prev => [...prev, {
-      key: newKey(), item_type: 'part', description: '', cost: 0, price: 0, quantity: 1, taxable: 1, amount: 0
+      key, item_type: 'part', description: '', cost: 0, price: 0, quantity: 1, taxable: 1, amount: 0
     }])
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`part-desc-${key}`) as HTMLInputElement | null
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el?.focus()
+    })
   }
 
   const addLaborItem = (service: Service) => {
@@ -162,7 +225,7 @@ const JobCardForm: React.FC = () => {
       cost: 0,
       price: service.rate,
       quantity: 1,
-      taxable: 1,
+      taxable: 0,
       amount: service.rate,
     }])
     setLaborSearch('')
@@ -170,9 +233,15 @@ const JobCardForm: React.FC = () => {
   }
 
   const addCustomLaborItem = () => {
+    const key = newKey()
     setItems(prev => [...prev, {
-      key: newKey(), item_type: 'labor', description: '', cost: 0, price: 0, quantity: 1, taxable: 1, amount: 0
+      key, item_type: 'labor', description: '', cost: 0, price: 0, quantity: 1, taxable: 0, amount: 0
     }])
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`labor-desc-${key}`) as HTMLInputElement | null
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el?.focus()
+    })
   }
 
   const updateItem = (key: string, patch: Partial<ItemDraft>) => {
@@ -191,12 +260,13 @@ const JobCardForm: React.FC = () => {
 
   const subtotal = items.reduce((s, i) => s + Number(i.amount || 0), 0)
   const taxableSubtotal = items.filter(i => i.taxable !== 0).reduce((s, i) => s + Number(i.amount || 0), 0)
-  const vatAmount = vatEnabled ? taxableSubtotal * (vatRate / 100) : 0
-  const total = subtotal + vatAmount - discount + otherCharges
+  const vatAmount = taxableSubtotal * (vatRate / 100)
+  const discountAmount = discountType === 'percentage' ? subtotal * (discount / 100) : discount
+  const total = subtotal + vatAmount - discountAmount + otherCharges
 
   const profitFromParts = partItems.reduce((s, i) => s + (Number(i.price || 0) - Number(i.cost || 0)) * Number(i.quantity || 0), 0)
   const profitFromLabor = laborItems.reduce((s, i) => s + Number(i.amount || 0), 0)
-  const profit = profitFromParts + profitFromLabor - discount
+  const profit = profitFromParts + profitFromLabor - discountAmount
   const balanceDue = total - amountPaid
 
   const handleSave = async () => {
@@ -207,9 +277,9 @@ const JobCardForm: React.FC = () => {
         conversion_client_id: clientId,
         conversion_vehicle_id: vehicleId ?? undefined,
         status,
-        vat_enabled: vatEnabled ? 1 : 0,
+        vat_enabled: 1,
         vat_rate: vatRate,
-        discount,
+        discount: discountAmount,
         other_charges: otherCharges,
         amount_paid: amountPaid,
         notes: notes || undefined,
@@ -221,7 +291,7 @@ const JobCardForm: React.FC = () => {
         const created = await adminApiService.createJobCard(payload)
         navigate(`/job-cards/${created.id}`, { replace: true })
       }
-      alert('Job card saved successfully')
+      alert(isEditing ? 'Job card saved successfully' : 'Quote saved successfully')
     } catch (error) {
       alert(`Failed to save job card: ${(error as any).message || 'Unknown error'}`)
     } finally {
@@ -229,9 +299,45 @@ const JobCardForm: React.FC = () => {
     }
   }
 
+  const openConvertModal = () => {
+    setUpdateInventoryChoice(true)
+    setSelectedStoreId('')
+    setConvertModalOpen(true)
+    if (stores.length === 0) {
+      setLoadingStores(true)
+      adminApiService.getStores().then(setStores).catch(() => setStores([])).finally(() => setLoadingStores(false))
+    }
+  }
+
+  const handleConvertToInvoice = async () => {
+    if (!id) return
+    const shouldUpdateInventory = updateInventoryChoice && partItems.length > 0
+    if (shouldUpdateInventory && !selectedStoreId) {
+      alert('Please select a store to deduct inventory from')
+      return
+    }
+    try {
+      setConverting(true)
+      const updated = await adminApiService.convertJobCardToInvoice(Number(id), {
+        update_inventory: shouldUpdateInventory,
+        store_id: shouldUpdateInventory ? Number(selectedStoreId) : undefined,
+      })
+      setStatus(updated.status)
+      setConvertModalOpen(false)
+      alert('Converted to invoice successfully')
+    } catch (error) {
+      alert(`Failed to convert to invoice: ${(error as any).message || 'Unknown error'}`)
+    } finally {
+      setConverting(false)
+    }
+  }
+
   const inp = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none'
   const lbl = 'block text-xs font-medium text-gray-600 mb-1'
   const money = (n: number) => `Ksh${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  // Still a quotation until converted to an invoice
+  const isQuotation = ESTIMATE_STAGE_STATUSES.includes(status)
 
   if (loading) {
     return (
@@ -253,23 +359,32 @@ const JobCardForm: React.FC = () => {
           <ChevronLeft className="h-4 w-4" />
         </button>
         <h1 className="text-sm font-bold flex-1">
-          {isEditing ? `Job Card #${id}` : 'New Job Card'}
+          {!isEditing ? 'New Quotation' : isQuotation ? `Quotation #${id}` : `Invoice #${id}`}
         </h1>
+        {isEditing && isQuotation && (
+          <button
+            onClick={openConvertModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors whitespace-nowrap"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" />
+            Convert to Invoice
+          </button>
+        )}
         {isEditing && (
           <button
             onClick={() => navigate(`/job-cards/${id}/invoice`)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors whitespace-nowrap"
           >
             <FileText className="h-3.5 w-3.5" />
-            View Invoice
+            {isQuotation ? 'View Quotation' : 'View Invoice'}
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 px-5 py-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 px-5 py-4">
 
         {/* ── Main column ── */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-3 space-y-4">
 
           {/* Client + Vehicle */}
           <div className="grid grid-cols-2 gap-3">
@@ -336,18 +451,6 @@ const JobCardForm: React.FC = () => {
             </div>
           </div>
 
-          {/* Notes */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-gray-900 uppercase tracking-wide mb-2.5">
-              <StickyNote className="h-3.5 w-3.5 text-green-600" />
-              Notes
-            </div>
-            <textarea
-              value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-              className={inp + ' resize-none'} placeholder="Job notes, diagnosis findings, instructions…"
-            />
-          </div>
-
           {/* Parts and Labor */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <h2 className="text-sm font-bold text-gray-900 mb-4">Parts and Labor</h2>
@@ -374,20 +477,21 @@ const JobCardForm: React.FC = () => {
               {partItems.length > 0 ? (
                 <div className="rounded-xl border border-gray-100 overflow-hidden mb-3">
                   <div className="overflow-x-auto">
-                    <div className="min-w-[760px]">
-                      <div className="grid grid-cols-[1fr_100px_100px_72px_110px_160px_36px] gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
+                    <div className="min-w-[850px]">
+                      <div className="grid grid-cols-[1fr_100px_100px_72px_90px_110px_160px_36px] gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center">Description</span>
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center text-right">Cost</span>
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center text-right">Price</span>
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center text-right">Qty</span>
+                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center">Taxable</span>
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center text-right">Amount</span>
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center">Assigned To</span>
                         <span></span>
                       </div>
                       <div className="divide-y divide-gray-50">
                         {partItems.map(item => (
-                          <div key={item.key} className="grid grid-cols-[1fr_100px_100px_72px_110px_160px_36px] gap-2 px-3 py-2 items-center hover:bg-gray-50/60 transition-colors">
-                            <input value={item.description} onChange={e => updateItem(item.key, { description: e.target.value })}
+                          <div key={item.key} className="grid grid-cols-[1fr_100px_100px_72px_90px_110px_160px_36px] gap-2 px-3 py-2 items-center hover:bg-gray-50/60 transition-colors">
+                            <input id={`part-desc-${item.key}`} value={item.description} onChange={e => updateItem(item.key, { description: e.target.value })}
                               className="w-full text-xs font-medium text-gray-800 border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-transparent rounded-lg px-2 py-1.5 outline-none"
                               placeholder="Part description" />
                             <span className="text-xs text-gray-400 text-right">
@@ -399,6 +503,12 @@ const JobCardForm: React.FC = () => {
                             <input type="number" min="0" step="1" value={item.quantity}
                               onChange={e => updateItem(item.key, { quantity: Number(e.target.value) || 0 })}
                               className="w-full text-xs text-right border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-transparent rounded-lg px-2 py-1.5 outline-none" />
+                            <select value={item.taxable ?? 1}
+                              onChange={e => updateItem(item.key, { taxable: Number(e.target.value) })}
+                              className="w-full text-xs border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-transparent rounded-lg px-2 py-1.5 outline-none">
+                              <option value={1}>True</option>
+                              <option value={0}>False</option>
+                            </select>
                             <span className="text-xs font-semibold text-gray-900 text-right whitespace-nowrap">
                               Ksh {Number(item.amount).toLocaleString()}
                             </span>
@@ -472,19 +582,20 @@ const JobCardForm: React.FC = () => {
               {laborItems.length > 0 ? (
                 <div className="rounded-xl border border-gray-100 overflow-hidden mb-3">
                   <div className="overflow-x-auto">
-                    <div className="min-w-[680px]">
-                      <div className="grid grid-cols-[1fr_100px_84px_110px_160px_36px] gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
+                    <div className="min-w-[770px]">
+                      <div className="grid grid-cols-[1fr_100px_84px_90px_110px_160px_36px] gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100">
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center">Description</span>
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center text-right">Rate</span>
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center text-right">Hrs/Qty</span>
+                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center">Taxable</span>
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center text-right">Amount</span>
                         <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide self-center">Assigned To</span>
                         <span></span>
                       </div>
                       <div className="divide-y divide-gray-50">
                         {laborItems.map(item => (
-                          <div key={item.key} className="grid grid-cols-[1fr_100px_84px_110px_160px_36px] gap-2 px-3 py-2 items-center hover:bg-gray-50/60 transition-colors">
-                            <input value={item.description} onChange={e => updateItem(item.key, { description: e.target.value })}
+                          <div key={item.key} className="grid grid-cols-[1fr_100px_84px_90px_110px_160px_36px] gap-2 px-3 py-2 items-center hover:bg-gray-50/60 transition-colors">
+                            <input id={`labor-desc-${item.key}`} value={item.description} onChange={e => updateItem(item.key, { description: e.target.value })}
                               className="w-full text-xs font-medium text-gray-800 border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-transparent rounded-lg px-2 py-1.5 outline-none"
                               placeholder="Labor description" />
                             <input type="number" min="0" step="0.01" value={item.price}
@@ -493,6 +604,12 @@ const JobCardForm: React.FC = () => {
                             <input type="number" min="0" step="0.5" value={item.quantity}
                               onChange={e => updateItem(item.key, { quantity: Number(e.target.value) || 0 })}
                               className="w-full text-xs text-right border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-transparent rounded-lg px-2 py-1.5 outline-none" />
+                            <select value={item.taxable ?? 0}
+                              onChange={e => updateItem(item.key, { taxable: Number(e.target.value) })}
+                              className="w-full text-xs border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-transparent rounded-lg px-2 py-1.5 outline-none">
+                              <option value={1}>True</option>
+                              <option value={0}>False</option>
+                            </select>
                             <span className="text-xs font-semibold text-gray-900 text-right whitespace-nowrap">
                               Ksh {Number(item.amount).toLocaleString()}
                             </span>
@@ -548,13 +665,25 @@ const JobCardForm: React.FC = () => {
             </div>
           </div>
 
+          {/* Notes */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-900 uppercase tracking-wide mb-2.5">
+              <StickyNote className="h-3.5 w-3.5 text-green-600" />
+              Notes
+            </div>
+            <textarea
+              value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              className={inp + ' resize-none'} placeholder="Job notes, diagnosis findings, instructions…"
+            />
+          </div>
+
           <button
             onClick={handleSave}
             disabled={saving}
             className="w-full py-3 text-sm font-semibold bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm flex items-center justify-center gap-2"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? 'Saving…' : isEditing ? 'Save Changes' : 'Create Job Card'}
+            {saving ? 'Saving…' : isEditing ? 'Save Changes' : 'Create Quotation'}
           </button>
         </div>
 
@@ -563,7 +692,7 @@ const JobCardForm: React.FC = () => {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-xs text-gray-400">Job Card</p>
+                <p className="text-xs text-gray-400">{!isEditing || isQuotation ? 'Quotation' : 'Invoice'}</p>
                 <p className="text-lg font-bold text-gray-900">{isEditing ? `#${id}` : 'New'}</p>
               </div>
               <select
@@ -587,29 +716,38 @@ const JobCardForm: React.FC = () => {
             <p className="text-xl font-bold text-gray-900 mb-3">{money(subtotal)}</p>
 
             <div className="flex items-center gap-2 mb-3">
-              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
-                <input type="checkbox" checked={vatEnabled} onChange={e => setVatEnabled(e.target.checked)} className="rounded border-gray-300" />
-                Apply VAT
-              </label>
-              {vatEnabled && (
-                <input type="number" min="0" step="0.01" value={vatRate}
-                  onChange={e => setVatRate(Number(e.target.value) || 0)}
-                  className="w-16 text-xs px-1.5 py-0.5 border border-gray-200 rounded" />
-              )}
-              {vatEnabled && <span className="text-xs text-gray-400">%</span>}
+              <span className="text-xs text-gray-600">Tax</span>
+              <select value={taxOption} onChange={e => setTaxOption(e.target.value as TaxOption)}
+                className="text-xs px-2 py-1 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                {TAX_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <span className="text-[10px] text-gray-400">— applies to items marked Taxable</span>
             </div>
 
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-gray-500">VAT ({vatEnabled ? vatRate : 0}%)</span>
+                <span className="text-gray-500">VAT ({vatRate}%, Exclusive)</span>
                 <span className="text-gray-700">{money(vatAmount)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-gray-500">Discount</span>
+                <span className="text-gray-500 flex items-center gap-1.5">
+                  Discount
+                  <select value={discountType} onChange={e => setDiscountType(e.target.value as 'fixed' | 'percentage')}
+                    className="text-[10px] px-1 py-0.5 border border-gray-200 rounded outline-none">
+                    <option value="fixed">Fixed Amount</option>
+                    <option value="percentage">%</option>
+                  </select>
+                </span>
                 <input type="number" min="0" step="0.01" value={discount}
                   onChange={e => setDiscount(Number(e.target.value) || 0)}
                   className="w-24 text-xs text-right px-1.5 py-0.5 border border-gray-200 rounded" />
               </div>
+              {discountType === 'percentage' && discount > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 text-[10px]">= {discount}% of subtotal</span>
+                  <span className="text-gray-400 text-[10px]">{money(discountAmount)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Other Charges</span>
                 <input type="number" min="0" step="0.01" value={otherCharges}
@@ -634,7 +772,7 @@ const JobCardForm: React.FC = () => {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Discount Subtraction</span>
-                <span className="text-red-500">-{money(discount)}</span>
+                <span className="text-red-500">-{money(discountAmount)}</span>
               </div>
               <div className="flex items-center justify-between pt-1.5 border-t border-gray-50">
                 <span className="font-semibold text-gray-900">Profit</span>
@@ -656,8 +794,118 @@ const JobCardForm: React.FC = () => {
               <span className={`text-sm font-bold ${balanceDue > 0 ? 'text-red-600' : 'text-gray-900'}`}>{money(balanceDue)}</span>
             </div>
           </div>
+
+          {/* Convert to invoice */}
+          {isEditing && isQuotation && (
+            <div className="bg-white rounded-2xl border border-green-200 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-7 w-7 rounded-lg bg-green-50 flex items-center justify-center">
+                  <ArrowRightLeft className="h-3.5 w-3.5 text-green-600" />
+                </div>
+                <p className="text-xs font-semibold text-gray-900 uppercase tracking-wide">Convert to Invoice</p>
+              </div>
+              <p className="text-[11px] text-gray-500 mb-3">
+                Turn this quotation into an invoice. You'll choose whether to deduct the parts from stock.
+              </p>
+              <button
+                onClick={openConvertModal}
+                className="w-full py-2.5 text-xs font-semibold bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                Convert to Invoice
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* ── Convert to invoice modal ── */}
+      {convertModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-green-50 flex items-center justify-center">
+                  <ArrowRightLeft className="h-4 w-4 text-green-600" />
+                </div>
+                <h2 className="text-sm font-semibold text-gray-900">Convert to Invoice</h2>
+              </div>
+              <button onClick={() => setConvertModalOpen(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              <p className="text-xs text-gray-500">
+                This will change the status to <span className="font-medium text-gray-700">Not Paid</span> and mark it as an invoice.
+              </p>
+
+              <div>
+                <p className="text-xs font-medium text-gray-700 mb-2">Update inventory?</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUpdateInventoryChoice(true)}
+                    className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
+                      updateInventoryChoice
+                        ? 'border-green-600 bg-green-50 text-green-700'
+                        : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    Yes, deduct stock
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUpdateInventoryChoice(false)}
+                    className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
+                      !updateInventoryChoice
+                        ? 'border-green-600 bg-green-50 text-green-700'
+                        : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    No
+                  </button>
+                </div>
+                {updateInventoryChoice && partItems.length === 0 && (
+                  <p className="text-[10px] text-gray-400 mt-1.5">No parts on this job card — nothing to deduct.</p>
+                )}
+              </div>
+
+              {updateInventoryChoice && partItems.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Deduct from store *</label>
+                  <select
+                    value={selectedStoreId}
+                    onChange={e => setSelectedStoreId(e.target.value)}
+                    disabled={loadingStores}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                  >
+                    <option value="">{loadingStores ? 'Loading stores…' : 'Select a store'}</option>
+                    {stores.map(s => (
+                      <option key={s.id} value={s.id}>{s.store_name}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-400 mt-1.5">
+                    {partItems.length} part{partItems.length === 1 ? '' : 's'} will be deducted and logged to the inventory ledger.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button type="button" onClick={() => setConvertModalOpen(false)} disabled={converting}
+                className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button type="button" onClick={handleConvertToInvoice} disabled={converting}
+                className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center gap-2">
+                {converting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {converting ? 'Converting…' : 'Convert'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
