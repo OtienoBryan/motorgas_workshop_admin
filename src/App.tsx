@@ -21,6 +21,8 @@ import AddVehicle from './pages/AddVehicle'
 import EditVehicle from './pages/EditVehicle'
 import VehicleDetails from './pages/VehicleDetails'
 import InspectionDetails from './pages/InspectionDetails'
+import InspectionForm from './pages/InspectionForm'
+import ChecklistTemplates from './pages/ChecklistTemplates'
 import Vehicles from './pages/Vehicles'
 import Parts from './pages/Parts'
 import Services from './pages/Services'
@@ -111,6 +113,9 @@ function AppContent() {
                 <Route path="/clients/:clientId/vehicles/new" element={<AddVehicle />} />
                 <Route path="/clients/:clientId/vehicles/:vehicleId/edit" element={<EditVehicle />} />
                 <Route path="/clients/:clientId/vehicles/:vehicleId" element={<VehicleDetails />} />
+                <Route path="/checklist-templates" element={<ChecklistTemplates />} />
+                <Route path="/inspections/new" element={<InspectionForm />} />
+                <Route path="/inspections/:templateId/edit" element={<InspectionForm />} />
                 <Route path="/clients/:clientId/vehicles/:vehicleId/inspections/:inspectionId" element={<InspectionDetails />} />
                 <Route path="/vehicles" element={<Vehicles />} />
                 <Route path="/vehicles/new" element={<AddVehicle />} />

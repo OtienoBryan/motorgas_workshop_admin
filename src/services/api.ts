@@ -512,6 +512,7 @@ export interface Part {
   selling_price_usd?: number | null
   status?: string | null
   notes?: string | null
+  image_url?: string | null
   created_at: string
   updated_at: string
 }
@@ -578,6 +579,14 @@ export interface VehicleInspection {
   technician?: Staff
   conversionClient?: ConversionClient
   conversionVehicle?: ConversionVehicle
+  created_at: string
+  updated_at: string
+}
+
+export interface ChecklistTemplate {
+  id: number
+  title: string
+  checklist?: string | null
   created_at: string
   updated_at: string
 }
@@ -1197,7 +1206,7 @@ class AdminApiService {
     
     // Create AbortController for timeout
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
     
     // Check if body is FormData - if so, don't set Content-Type (browser will set it with boundary)
     const isFormData = options.body instanceof FormData
@@ -1213,13 +1222,7 @@ class AdminApiService {
       ...options,
     }
     
-    console.log('🔧 [API] Making request to:', url)
-    console.log('🔧 [API] Headers:', config.headers)
-    console.log('🔧 [API] Method:', config.method || 'GET')
-
     try {
-      console.log(`🌍 Making admin API request to: ${url}`)
-      console.log(`🌍 Headers:`, config.headers)
       const response = await fetch(url, config)
 
       clearTimeout(timeoutId)
@@ -2751,14 +2754,17 @@ class AdminApiService {
   }
 
   // Job Cards Management
-  async getJobCards(conversionVehicleId?: number): Promise<JobCard[]> {
-    console.log('🧾 [API] getJobCards called', conversionVehicleId ? `for vehicle: ${conversionVehicleId}` : '')
+  async getJobCards(conversionVehicleId?: number, conversionClientId?: number): Promise<JobCard[]> {
+    console.log('🧾 [API] getJobCards called', conversionVehicleId ? `for vehicle: ${conversionVehicleId}` : '', conversionClientId ? `for client: ${conversionClientId}` : '')
     if (USE_MOCK_DATA) {
       await new Promise(resolve => setTimeout(resolve, 300))
       return []
     }
-    const url = conversionVehicleId ? `/job-cards?conversionVehicleId=${conversionVehicleId}` : '/job-cards'
-    return this.request<JobCard[]>(url)
+    const params = new URLSearchParams()
+    if (conversionVehicleId) params.set('conversionVehicleId', String(conversionVehicleId))
+    if (conversionClientId) params.set('conversionClientId', String(conversionClientId))
+    const qs = params.toString()
+    return this.request<JobCard[]>(`/job-cards${qs ? `?${qs}` : ''}`)
   }
 
   async getJobCard(id: number): Promise<JobCard> {
@@ -2862,6 +2868,22 @@ class AdminApiService {
     })
   }
 
+  async updateVehicleInspection(id: number, data: Partial<VehicleInspection>): Promise<VehicleInspection> {
+    console.log('🔍 [API] updateVehicleInspection called for inspection:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id,
+        ...data,
+        updated_at: new Date().toISOString()
+      } as VehicleInspection
+    }
+    return this.request<VehicleInspection>(`/vehicle-inspections/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  }
+
   async deleteVehicleInspection(id: number): Promise<void> {
     console.log('🔍 [API] deleteVehicleInspection called for inspection:', id)
     if (USE_MOCK_DATA) {
@@ -2869,6 +2891,69 @@ class AdminApiService {
       return
     }
     return this.request<void>(`/vehicle-inspections/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
+  // Checklist Templates
+  async getChecklistTemplates(): Promise<ChecklistTemplate[]> {
+    console.log('✅ [API] getChecklistTemplates called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return []
+    }
+    return this.request<ChecklistTemplate[]>('/checklist-templates')
+  }
+
+  async getChecklistTemplate(id: number): Promise<ChecklistTemplate> {
+    console.log('✅ [API] getChecklistTemplate called for template:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      throw new Error('Checklist template not found')
+    }
+    return this.request<ChecklistTemplate>(`/checklist-templates/${id}`)
+  }
+
+  async createChecklistTemplate(data: Partial<ChecklistTemplate>): Promise<ChecklistTemplate> {
+    console.log('✅ [API] createChecklistTemplate called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id: Date.now(),
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as ChecklistTemplate
+    }
+    return this.request<ChecklistTemplate>('/checklist-templates', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async updateChecklistTemplate(id: number, data: Partial<ChecklistTemplate>): Promise<ChecklistTemplate> {
+    console.log('✅ [API] updateChecklistTemplate called for template:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id,
+        ...data,
+        updated_at: new Date().toISOString()
+      } as ChecklistTemplate
+    }
+    return this.request<ChecklistTemplate>(`/checklist-templates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteChecklistTemplate(id: number): Promise<void> {
+    console.log('✅ [API] deleteChecklistTemplate called for template:', id)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return
+    }
+    return this.request<void>(`/checklist-templates/${id}`, {
       method: 'DELETE'
     })
   }

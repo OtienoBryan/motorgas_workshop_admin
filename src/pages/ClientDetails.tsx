@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { QRCodeCanvas } from 'qrcode.react'
+import html2canvas from 'html2canvas'
 import { adminApiService, JobCard } from '../services/api'
 import {
   ChevronLeft,
@@ -24,6 +26,8 @@ import {
   Tags,
   CalendarClock,
   ClipboardCheck,
+  QrCode,
+  Download,
 } from 'lucide-react'
 import { Client, mapConversionClient } from './Clients'
 import { ESTIMATE_STAGE_STATUSES, STATUS_STYLES as JOB_STATUS_STYLES, STATUS_LABELS as JOB_STATUS_LABELS } from './JobCardForm'
@@ -79,7 +83,7 @@ const ClientDetails: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loadingClient, setLoadingClient] = useState(true)
   const [loadingVehicles, setLoadingVehicles] = useState(true)
-  const [activeTab, setActiveTab] = useState<'information' | 'vehicles' | 'invoices' | 'service' | 'quotations'>('information')
+  const [activeTab, setActiveTab] = useState<'information' | 'vehicles' | 'invoices' | 'service' | 'quotations' | 'qrcode'>('information')
   const [jobCards, setJobCards] = useState<JobCard[]>([])
   const [loadingJobCards, setLoadingJobCards] = useState(true)
 
@@ -121,9 +125,8 @@ const ClientDetails: React.FC = () => {
   const fetchJobCards = async (id: number) => {
     try {
       setLoadingJobCards(true)
-      const data = await adminApiService.getJobCards()
-      const clientJobCards = (Array.isArray(data) ? data : []).filter(jc => jc.conversion_client_id === id)
-      setJobCards(clientJobCards)
+      const data = await adminApiService.getJobCards(undefined, id)
+      setJobCards(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error fetching job cards:', error)
       setJobCards([])
@@ -228,6 +231,7 @@ const ClientDetails: React.FC = () => {
             { id: 'quotations',  label: 'Quotations',  icon: <ClipboardCheck className="h-3.5 w-3.5" />,
               badge: loadingJobCards ? undefined : quotations.length },
             { id: 'service',     label: 'Service',     icon: <Wrench className="h-3.5 w-3.5" /> },
+            { id: 'qrcode',      label: 'QR Code',     icon: <QrCode className="h-3.5 w-3.5" /> },
           ] as const).map(tab => (
             <button
               key={tab.id}
@@ -631,6 +635,13 @@ const ClientDetails: React.FC = () => {
           </div>
         )}
 
+        {/* QR Code */}
+        {activeTab === 'qrcode' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <ClientQrTab client={client} vehicles={vehicles} />
+          </div>
+        )}
+
       </div>
     </div>
   )
@@ -678,5 +689,163 @@ const SettingRow: React.FC<SettingRowProps> = ({ icon, label, enabled, value }) 
     </div>
   </div>
 )
+
+/* ── Client QR code tab ── */
+const ClientQrTab: React.FC<{ client: Client; vehicles: Vehicle[] }> = ({ client, vehicles }) => {
+  const exportRef = useRef<HTMLDivElement>(null)
+  const [downloading, setDownloading] = useState(false)
+
+  const buildQrValue = (compactVehicles: boolean) => {
+    const vehicleLines = vehicles.length === 0
+      ? ['No vehicles on record']
+      : vehicles.flatMap((v, i) => {
+          const title = [v.year, v.make, v.model].filter(Boolean).join(' ')
+          const headline = `${i + 1}. ${v.registration_number}${title ? ` — ${title}` : ''}`
+          if (compactVehicles) return [headline]
+          return [
+            headline,
+            v.vehicle_type && `   Type: ${v.vehicle_type}`,
+            v.vin_serial_number && `   VIN: ${v.vin_serial_number}`,
+            v.engine && `   Engine: ${v.engine}`,
+            v.color && `   Color: ${v.color}`,
+            v.current_odo && `   Odometer: ${v.current_odo.toLocaleString()} ${v.odo_unit}`,
+          ].filter(Boolean) as string[]
+        })
+
+    return [
+      'MOTORGAS AFRICA — CLIENT ID',
+      '',
+      '— CLIENT —',
+      `Client ID: ${client.id}`,
+      `Name: ${client.name}`,
+      `Category: ${client.category === 'company' ? 'Company' : 'Individual'}`,
+      client.contact && `Phone: ${client.contact}`,
+      client.email && `Email: ${client.email}`,
+      client.address && `Address: ${client.address}`,
+      client.region && `Region: ${client.region}`,
+      client.taxPin && `Tax PIN: ${client.taxPin}`,
+      client.accountNumber && `Account No: ${client.accountNumber}`,
+      '',
+      `— VEHICLES (${vehicles.length}) —`,
+      ...vehicleLines,
+    ].filter(Boolean).join('\n')
+  }
+
+  // Full vehicle details, falling back to one line per vehicle if the payload
+  // would exceed what a level-H QR code can reliably hold
+  const detailedQrValue = buildQrValue(false)
+  const qrValue = detailedQrValue.length <= 1100 ? detailedQrValue : buildQrValue(true)
+
+  const handleDownload = async () => {
+    if (!exportRef.current) return
+    try {
+      setDownloading(true)
+      const canvas = await html2canvas(exportRef.current, { backgroundColor: '#ffffff', scale: 3 })
+      const link = document.createElement('a')
+      const clientName = client.name.trim().replace(/[^a-zA-Z0-9]+/g, '-') || 'Client'
+      link.download = `${clientName}-qr.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-sm font-bold text-gray-900">Client QR Code</h2>
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+        >
+          {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          Download PNG
+        </button>
+      </div>
+
+      <div className="flex flex-col items-center py-4">
+        {/* QR card */}
+        <div className="w-[340px] rounded-3xl overflow-hidden shadow-lg bg-white border border-gray-100">
+          <div className="h-2.5 bg-gradient-to-r from-green-500 via-green-400 to-green-600" />
+
+          <div className="px-8 pt-7 pb-8 flex flex-col items-center">
+            <img src="/motor.jpeg" alt="MotorGas" className="h-12 object-contain mb-1" />
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-[0.2em] mb-5">Client Identity</p>
+
+            <div className="rounded-2xl border-2 border-gray-100 p-4 bg-white">
+              <QRCodeCanvas
+                value={qrValue}
+                size={640}
+                level="H"
+                marginSize={0}
+                bgColor="#ffffff"
+                fgColor="#111827"
+                imageSettings={{
+                  src: '/motor.jpeg',
+                  height: 128,
+                  width: 128,
+                  excavate: true,
+                }}
+                style={{ width: 224, height: 224 }}
+              />
+            </div>
+
+            <h3 className="text-base font-bold text-gray-900 mt-5 text-center leading-tight">{client.name}</h3>
+            {client.accountNumber && (
+              <span className="mt-2 inline-flex items-center font-mono text-sm font-bold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg px-3 py-1 tracking-wider">
+                {client.accountNumber}
+              </span>
+            )}
+            {client.contact && (
+              <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                <Phone className="h-3 w-3" /> {client.contact}
+              </p>
+            )}
+
+            <p className="text-[10px] text-gray-300 mt-5">Scan for client details</p>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-gray-400 mt-5 max-w-sm text-center">
+          The QR code contains this client's key details and contact information.
+          Print it and attach it to their file for quick identification.
+        </p>
+      </div>
+
+      {/* Offscreen card rendered to PNG on download */}
+      <div className="fixed -left-[9999px] top-0">
+        <div ref={exportRef} className="w-[375px] bg-white px-8 py-8 flex flex-col items-center">
+          <img src="/motor.jpeg" alt="MotorGas" className="h-12 object-contain mb-2" />
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.25em] mb-6">Client Identity</p>
+          <div className="rounded-2xl border-2 border-gray-100 p-5 bg-white">
+            <QRCodeCanvas
+              value={qrValue}
+              size={640}
+              level="H"
+              marginSize={0}
+              bgColor="#ffffff"
+              fgColor="#111827"
+              imageSettings={{
+                src: '/motor.jpeg',
+                height: 128,
+                width: 128,
+                excavate: true,
+              }}
+              style={{ width: 256, height: 256 }}
+            />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mt-6 text-center leading-tight">{client.name}</h3>
+          {client.accountNumber && (
+            <span className="mt-3 inline-flex items-center font-mono text-sm font-bold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg px-3.5 py-1.5 tracking-wider">
+              {client.accountNumber}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default ClientDetails

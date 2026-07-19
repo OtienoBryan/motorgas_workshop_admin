@@ -36,19 +36,19 @@ const PartDetails: React.FC = () => {
   const [loading, setLoading]     = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [isEditOpen, setIsEditOpen] = useState(false)
+  const [imageExpanded, setImageExpanded] = useState(false)
 
   useEffect(() => { if (partId) load(Number(partId)) }, [partId])
 
   const load = async (id: number) => {
     try {
       setLoading(true)
-      const [allParts, partInvData, st, ledgerData] = await Promise.all([
-        adminApiService.getParts(),
+      const [found, partInvData, st, ledgerData] = await Promise.all([
+        adminApiService.getPartById(id).catch((): Part | null => null),
         adminApiService.getInventoryByPart(id),
         adminApiService.getStores(),
         adminApiService.getPartLedger(id),
       ])
-      const found   = (Array.isArray(allParts)    ? allParts    : []).find((p: any) => p.id === id) ?? null
       const partInv = Array.isArray(partInvData) ? partInvData : []
       setPart(found)
       setInventory(partInv)
@@ -107,9 +107,20 @@ const PartDetails: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-              <Package className="h-5 w-5 text-white/80" />
-            </div>
+            {part.image_url ? (
+              <button
+                type="button"
+                onClick={() => setImageExpanded(true)}
+                className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity"
+                title="Click to expand"
+              >
+                <img src={part.image_url} alt={part.name} className="w-full h-full object-cover" />
+              </button>
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                <Package className="h-5 w-5 text-white/80" />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
                 <span className="font-mono text-[10px] bg-white/20 px-2 py-0.5 rounded-full">{part.part_number}</span>
@@ -160,6 +171,20 @@ const PartDetails: React.FC = () => {
         {/* ══ Overview ══ */}
         {activeTab === 'overview' && (
           <>
+            {/* Part image */}
+            {part.image_url && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <button
+                  type="button"
+                  onClick={() => setImageExpanded(true)}
+                  className="w-20 h-20 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity"
+                  title="Click to expand"
+                >
+                  <img src={part.image_url} alt={part.name} className="w-full h-full object-cover" />
+                </button>
+              </div>
+            )}
+
             {/* Main info card */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-50">
@@ -412,6 +437,27 @@ const PartDetails: React.FC = () => {
 
       {isEditOpen && (
         <EditPartModal part={part} onClose={() => setIsEditOpen(false)} onSaved={() => load(part.id)} />
+      )}
+
+      {/* ── Image lightbox ── */}
+      {imageExpanded && part.image_url && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setImageExpanded(false)}
+        >
+          <img
+            src={part.image_url}
+            alt={part.name}
+            className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setImageExpanded(false)}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       )}
     </div>
   )

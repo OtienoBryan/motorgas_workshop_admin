@@ -6,11 +6,8 @@ import {
   FileText,
   ClipboardCheck,
   BarChart3,
-  Receipt,
   ShoppingCart,
   Truck,
-  Users,
-  BookOpen,
 } from 'lucide-react'
 
 interface AccountCard {
@@ -52,15 +49,6 @@ const CARDS: AccountCard[] = [
     features: ['Revenue and profit trends', 'Sales rep performance', 'Key account breakdown', 'Date range filtering'],
   },
   {
-    slug: 'post-sale',
-    name: 'Post Sale',
-    icon: Receipt,
-    gradient: 'from-red-500 to-red-600',
-    route: '/sales/post',
-    description: 'Record a new sale transaction and post it against inventory and client accounts.',
-    features: ['New sale entry', 'Inventory deduction', 'Client account posting', 'Payment recording'],
-  },
-  {
     slug: 'purchase-orders',
     name: 'Purchase Orders',
     icon: ShoppingCart,
@@ -77,24 +65,6 @@ const CARDS: AccountCard[] = [
     route: '/vendors',
     description: 'Select a vendor to view their ledger — running balance of purchases, payments, and credit.',
     features: ['Vendor directory', 'Per-vendor ledger', 'Running balance', 'Payment history'],
-  },
-  {
-    slug: 'key-accounts',
-    name: 'Key Accounts',
-    icon: Users,
-    gradient: 'from-cyan-500 to-cyan-600',
-    route: '/key-accounts',
-    description: 'Manage key account clients, their credit terms, and assigned regions.',
-    features: ['Key account directory', 'Credit terms management', 'Region assignment', 'Account status'],
-  },
-  {
-    slug: 'key-account-ledger',
-    name: 'Key Account Ledger',
-    icon: BookOpen,
-    gradient: 'from-blue-500 to-blue-600',
-    route: '/key-accounts/ledger',
-    description: 'Track key account balances and generate statements of running debits and credits.',
-    features: ['Running balance tracking', 'Debit and credit entries', 'Statement export', 'Account filtering'],
   },
 ]
 

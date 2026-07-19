@@ -97,7 +97,7 @@ const Dashboard: React.FC = () => {
     { name: 'Conversion', icon: Wrench, route: '/conversion', color: 'text-purple-700', bgColor: 'bg-purple-500', badge: undefined },
     { name: 'Accounting', icon: Calculator, route: '/accounts', color: 'text-indigo-700', bgColor: 'bg-indigo-500', badge: undefined },
     { name: 'Payments', icon: CreditCard, route: '/sales/report', color: 'text-amber-700', bgColor: 'bg-amber-500', badge: undefined },
-    { name: 'Inspections', icon: CheckCircle2, route: '/conversion', color: 'text-purple-700', bgColor: 'bg-purple-500', badge: undefined },
+    { name: 'Inspection Checklist', icon: CheckCircle2, route: '/checklist-templates', color: 'text-purple-700', bgColor: 'bg-purple-500', badge: undefined },
     { name: 'Calendar', icon: CalendarIcon, route: '/calendar', color: 'text-teal-700', bgColor: 'bg-teal-500', badge: undefined },
     { name: 'Notice Board', icon: Bell, route: '/notices', color: 'text-blue-700', bgColor: 'bg-blue-500', badge: undefined },
     { name: 'OBD Scanner', icon: Activity, route: '/dashboard', color: 'text-orange-700', bgColor: 'bg-orange-500', badge: undefined, disabled: true },

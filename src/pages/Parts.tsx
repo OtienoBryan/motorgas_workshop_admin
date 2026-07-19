@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminApiService, Category } from '../services/api'
+import { cloudinaryService } from '../services/cloudinary'
 import {
   Plus,
   Search,
@@ -18,6 +19,7 @@ import {
   AlertTriangle,
   Tag,
   ClipboardList,
+  ImagePlus,
 } from 'lucide-react'
 
 interface Part {
@@ -35,6 +37,7 @@ interface Part {
   min_stock_level?: number
   location?: string
   status?: string
+  image_url?: string
   created_at: string
   updated_at: string
 }
@@ -76,9 +79,11 @@ const PartModal: React.FC<PartModalProps> = ({
     selling_price: undefined,
     selling_price_usd: undefined,
     min_stock_level: undefined,
-    status: ''
+    status: '',
+    image_url: ''
   })
   const [saving, setSaving] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [loadingCategories, setLoadingCategories] = useState(false)
 
@@ -96,14 +101,36 @@ const PartModal: React.FC<PartModalProps> = ({
       selling_price: part.selling_price,
       selling_price_usd: part.selling_price_usd,
       min_stock_level: part.min_stock_level,
-      status: part.status || ''
+      status: part.status || '',
+      image_url: part.image_url || ''
     } : {
       part_number: '', name: '', description: '', category: '',
       manufacturer: '', unit_price: undefined, unit_price_usd: undefined,
       selling_price: undefined, selling_price_usd: undefined, min_stock_level: undefined,
-      status: ''
+      status: '', image_url: ''
     })
   }, [isOpen, isEditing, part])
+
+  const handleImageSelect = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+    setUploadingImage(true)
+    try {
+      const result = await cloudinaryService.uploadImage(file, { folder: 'part-images' })
+      setFormData(prev => ({ ...prev, image_url: result.secure_url }))
+    } catch (error) {
+      console.error('Part image upload failed:', error)
+      alert(`Failed to upload image: ${(error as any).message || 'Unknown error'}`)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setFormData(prev => ({ ...prev, image_url: '' }))
+  }
 
   const fetchCategories = async () => {
     try {
@@ -175,6 +202,40 @@ const PartModal: React.FC<PartModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <div>
+            <label className={lbl}>Part Image</label>
+            <div className="flex items-center gap-4">
+              <div className="relative w-24 h-24 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
+                {uploadingImage ? (
+                  <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+                ) : formData.image_url ? (
+                  <img src={formData.image_url} alt="Part" className="w-full h-full object-cover" />
+                ) : (
+                  <Package className="h-6 w-6 text-gray-300" />
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors">
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  {formData.image_url ? 'Change Image' : 'Upload Image'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingImage}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleImageSelect(f); e.target.value = '' }}
+                  />
+                </label>
+                {formData.image_url && (
+                  <button type="button" onClick={handleRemoveImage}
+                    className="px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-red-600 transition-colors">
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={lbl}>Part Number *</label>
