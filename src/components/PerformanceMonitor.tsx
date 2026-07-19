@@ -48,7 +48,7 @@ const PerformanceMonitor: React.FC = () => {
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-900 flex items-center">
           <Zap className="h-4 w-4 mr-2 text-green-500" />
-          Performance Monitor
+          Performance Monitors
         </h3>
         <button
           onClick={() => setIsVisible(false)}
