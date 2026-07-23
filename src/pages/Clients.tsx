@@ -22,8 +22,11 @@ export interface Client {
   email?: string
   contact: string
   address?: string
+  notes?: string
   region: string
   category: 'individual' | 'company'
+  organizationType?: 'individual' | 'sacco' | 'company'
+  organizationName?: string
   taxPin?: string
   accountNumber?: string
   referralSource?: string
@@ -42,6 +45,16 @@ export interface Client {
 export const REFERRAL_SOURCES = [
   'Referral', 'Google Search', 'Social Media', 'Walk-in', 'Repeat Customer', 'Advertisement', 'Other',
 ]
+
+const ORG_TYPE_LABELS: Record<'individual' | 'sacco' | 'company', string> = {
+  individual: 'Individual', sacco: 'Sacco', company: 'Company',
+}
+const ORG_TYPE_STYLES: Record<'individual' | 'sacco' | 'company', string> = {
+  individual: 'bg-blue-100 text-blue-700', sacco: 'bg-amber-100 text-amber-700', company: 'bg-violet-100 text-violet-700',
+}
+const ORG_TYPE_ICONS: Record<'individual' | 'sacco' | 'company', React.ReactNode> = {
+  individual: <UserCheck className="h-2.5 w-2.5" />, sacco: <Users className="h-2.5 w-2.5" />, company: <Building2 className="h-2.5 w-2.5" />,
+}
 
 /* ── Small toggle switch ── */
 export const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void }> = ({ checked, onChange }) => (
@@ -65,8 +78,9 @@ export const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void
 
 export const mapConversionClient = (c: ConversionClient): Client => ({
   id: c.id, name: c.name, email: c.email || undefined,
-  contact: c.contact, address: c.address || undefined,
+  contact: c.contact, address: c.address || undefined, notes: c.description || undefined,
   region: c.region || '', category: (c.category as 'individual' | 'company') || 'individual',
+  organizationType: c.organization_type || undefined, organizationName: c.organization_name || undefined,
   taxPin: c.tax_pin || undefined, accountNumber: c.account_number || undefined,
   referralSource: c.referral_source || undefined, referralNotes: c.referral_notes || undefined,
   taxExempt: !!c.tax_exempt, applyDiscount: !!c.apply_discount, discountRate: c.discount_rate?.toString() || undefined,
@@ -78,7 +92,10 @@ export const mapConversionClient = (c: ConversionClient): Client => ({
 export const buildClientPayload = (clientData: Partial<Client>) => ({
   name: clientData.name || '', email: clientData.email || undefined,
   contact: clientData.contact || '', category: clientData.category || 'individual',
+  organization_type: clientData.organizationType || undefined,
+  organization_name: clientData.organizationType ? (clientData.organizationName || undefined) : undefined,
   tax_pin: clientData.taxPin || '', address: clientData.address || '',
+  description: clientData.notes || undefined,
   region: clientData.region || '', is_active: 1,
   referral_source: clientData.referralSource || undefined,
   referral_notes: clientData.referralNotes || undefined,
@@ -131,7 +148,7 @@ const Clients: React.FC = () => {
   const filtered = clients.filter(c => {
     const matchesFilter = filter === 'all' || c.category === filter
     const q = searchTerm.toLowerCase()
-    const matchesSearch = !q || [c.name, c.email, c.contact, c.address, c.region, c.accountNumber]
+    const matchesSearch = !q || [c.name, c.email, c.contact, c.address, c.region, c.accountNumber, c.organizationName]
       .some(v => v?.toLowerCase().includes(q))
     return matchesFilter && matchesSearch
   })
@@ -229,7 +246,8 @@ const Clients: React.FC = () => {
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Name</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Account No.</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Type</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Organization Type</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Organization Name</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Email</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Region</th>
@@ -239,7 +257,6 @@ const Clients: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {paginated.map(client => {
-                  const isCompany = client.category === 'company'
                   return (
                     <tr key={client.id}
                       className="group hover:bg-gray-50 transition-colors cursor-pointer"
@@ -257,14 +274,19 @@ const Clients: React.FC = () => {
                           : <span className="text-xs text-gray-300">—</span>}
                       </td>
 
-                      {/* Type */}
+                      {/* Organization Type */}
                       <td className="px-4 py-1.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                          isCompany ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {isCompany ? <Building2 className="h-2.5 w-2.5" /> : <UserCheck className="h-2.5 w-2.5" />}
-                          {isCompany ? 'Company' : 'Individual'}
-                        </span>
+                        {client.organizationType
+                          ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${ORG_TYPE_STYLES[client.organizationType]}`}>
+                              {ORG_TYPE_ICONS[client.organizationType]}
+                              {ORG_TYPE_LABELS[client.organizationType]}
+                            </span>
+                          : <span className="text-xs text-gray-300">—</span>}
+                      </td>
+
+                      {/* Organization Name */}
+                      <td className="px-4 py-1.5 text-xs text-gray-700 whitespace-nowrap">
+                        {client.organizationName || <span className="text-gray-300">—</span>}
                       </td>
 
                       {/* Contact */}

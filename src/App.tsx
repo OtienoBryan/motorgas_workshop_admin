@@ -36,6 +36,8 @@ import InventoryReport from './pages/InventoryReport'
 import PostSale from './pages/PostSale'
 import KeyAccountLedgerReport from './pages/KeyAccountLedgerReport'
 import SalesReport from './pages/SalesReport'
+import WeeklySalesReport from './pages/WeeklySalesReport'
+import VehicleFuelReport from './pages/VehicleFuelReport'
 import Conversion from './pages/Conversion'
 import JobCards from './pages/JobCards'
 import JobCardForm from './pages/JobCardForm'
@@ -99,6 +101,8 @@ function AppContent() {
                 <Route path="/inventory/report" element={<InventoryReport />} />
                 <Route path="/sales/post" element={<PostSale />} />
                 <Route path="/sales/report" element={<SalesReport />} />
+                <Route path="/sales/report/weekly" element={<WeeklySalesReport />} />
+                <Route path="/sales/report/fuel" element={<VehicleFuelReport />} />
                 <Route path="/conversion" element={<Conversion />} />
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/key-accounts/ledger" element={<KeyAccountLedgerReport />} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { adminApiService, Part, Store, PartLedgerEntry } from '../services/api'
+import { adminApiService, Part, Station, PartLedgerEntry } from '../services/api'
 import {
   ChevronLeft, Loader2, Edit, Package, Tag, History,
   AlertCircle, CheckCircle2, X, MapPin, Building2,
@@ -15,7 +15,7 @@ interface InventoryRow {
   min_stock_level?: number | null
   location?: string | null
   last_updated: string
-  store?: Store
+  store?: Station
 }
 
 type Tab = 'overview' | 'stock' | 'usage'
@@ -31,7 +31,7 @@ const PartDetails: React.FC = () => {
   const { partId } = useParams<{ partId: string }>()
   const [part, setPart]           = useState<Part | null>(null)
   const [inventory, setInventory] = useState<InventoryRow[]>([])
-  const [stores, setStores]       = useState<Store[]>([])
+  const [stores, setStores]       = useState<Station[]>([])
   const [ledger, setLedger]       = useState<PartLedgerEntry[]>([])
   const [loading, setLoading]     = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
@@ -46,7 +46,7 @@ const PartDetails: React.FC = () => {
       const [found, partInvData, st, ledgerData] = await Promise.all([
         adminApiService.getPartById(id).catch((): Part | null => null),
         adminApiService.getInventoryByPart(id),
-        adminApiService.getStores(),
+        adminApiService.getStations(),
         adminApiService.getPartLedger(id),
       ])
       const partInv = Array.isArray(partInvData) ? partInvData : []
@@ -276,7 +276,7 @@ const PartDetails: React.FC = () => {
                             <Building2 className="h-3.5 w-3.5 text-gray-400" />
                           </div>
                           <div>
-                            <p className="text-xs font-semibold text-gray-900">{store?.store_name ?? `Store #${row.store_id}`}</p>
+                            <p className="text-xs font-semibold text-gray-900">{store?.name ?? `Store #${row.store_id}`}</p>
                             {row.location && <p className="text-[10px] text-gray-400 flex items-center gap-1"><MapPin className="h-2.5 w-2.5" />{row.location}</p>}
                           </div>
                         </div>
@@ -344,7 +344,7 @@ const PartDetails: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-4 py-2.5 text-xs text-gray-700 whitespace-nowrap">
-                            {entry.store?.store_name ?? `Store #${entry.store_id}`}
+                            {entry.store?.name ?? `Store #${entry.store_id}`}
                           </td>
                           <td className="px-4 py-2.5">
                             <span className={`text-xs font-bold ${entry.transaction_type === 'OUT' || entry.transaction_type === 'TRANSFER_OUT' ? 'text-red-600' : 'text-green-600'}`}>

@@ -4,6 +4,7 @@ import { adminApiService, ConversionClient } from '../services/api'
 import { cloudinaryService } from '../services/cloudinary'
 import {
   ChevronLeft,
+  ChevronDown,
   ImageIcon,
   Loader2,
   Sparkles,
@@ -90,6 +91,8 @@ const AddVehicle: React.FC = () => {
   const [uploadingLogbook, setUploadingLogbook] = useState(false)
   const [analyzingImage, setAnalyzingImage] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [notesExpanded, setNotesExpanded] = useState(true)
+  const notesRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const vsaInputRef = useRef<HTMLInputElement>(null)
   const logbookInputRef = useRef<HTMLInputElement>(null)
@@ -120,6 +123,15 @@ const AddVehicle: React.FC = () => {
       fetchClients()
     }
   }, [clientId])
+
+  const notesIsFirstRender = useRef(true)
+  useEffect(() => {
+    if (notesIsFirstRender.current) {
+      notesIsFirstRender.current = false
+      return
+    }
+    if (notesExpanded) notesRef.current?.focus()
+  }, [notesExpanded])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -711,21 +723,31 @@ const AddVehicle: React.FC = () => {
 
           {/* ── Notes ── */}
           <div className={section}>
-            <div className="flex items-center justify-between mb-2.5">
+            <button
+              type="button"
+              onClick={() => setNotesExpanded(v => !v)}
+              className={`w-full flex items-center justify-between text-left ${notesExpanded ? 'mb-2.5' : ''}`}
+            >
               <div className={sectionTitle + ' mb-0'}>
                 <StickyNote className="h-3.5 w-3.5 text-green-600" />
                 Notes
               </div>
-              <span className="text-[10px] text-gray-400">Internal only — won't show up on invoices</span>
-            </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-400">Internal only — won't show up on invoices</span>
+                <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${notesExpanded ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+            {notesExpanded && (
             <textarea
+              ref={notesRef}
               name="notes"
               value={formData.notes}
               onChange={handleChange}
-              rows={2}
+              rows={22}
               className={inpPlain + ' resize-none'}
               placeholder="Enter any internal notes…"
             />
+            )}
           </div>
 
           {/* ── Actions ── */}

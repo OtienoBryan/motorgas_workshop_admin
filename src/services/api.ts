@@ -344,8 +344,11 @@ export interface ConversionClient {
   email: string | null
   contact: string
   address: string | null
+  description?: string | null
   region: string | null
   category: 'individual' | 'company'
+  organization_type?: 'individual' | 'sacco' | 'company' | null
+  organization_name?: string | null
   tax_pin: string | null
   referral_source?: string | null
   referral_notes?: string | null
@@ -469,7 +472,7 @@ export interface PartLedgerEntry {
   notes?: string | null
   created_by?: number | null
   created_at: string
-  store?: { id: number; store_name: string; store_code?: string }
+  store?: { id: number; name: string }
 }
 
 export interface Vendor {
@@ -625,7 +628,7 @@ export interface Inventory {
   min_stock_level?: number | null
   location?: string | null
   last_updated: string
-  store?: Store
+  store?: Station
   part?: Part
 }
 
@@ -694,15 +697,59 @@ export interface Sale {
   keyAccount?: KeyAccount
   vehicleId?: number
   vehicle?: Vehicle
+  conversionClientId?: number
+  conversionClient?: ConversionClient
+  conversionVehicleId?: number
+  conversionVehicle?: ConversionVehicle
   quantity: number
   unitPrice: number
   totalAmount: number
+  paymentMethod?: 'CASH' | 'CARD' | 'MPESA' | 'CREDIT' | 'other'
   saleDate: string
   referenceNumber?: string
   notes?: string
   createdBy?: number
   createdAt: string
   updatedAt: string
+}
+
+export interface WeeklyReportVehicle {
+  key: string
+  vehicleId: number | null
+  conversionVehicleId: number | null
+  regNo: string
+  org: string
+  driver: string
+  tel: string
+  daily: Record<string, number>
+  totalQuantity: number
+  totalAmount: number
+}
+
+export interface WeeklySalesReport {
+  startDate: string
+  endDate: string
+  vehicles: WeeklyReportVehicle[]
+}
+
+export interface FuelReportVehicle {
+  key: string
+  vehicleId: number | null
+  conversionVehicleId: number | null
+  regNo: string
+  org: string
+  driver: string
+  tel: string
+  dailyFills: Record<string, number>
+  totalFills: number
+  totalQuantity: number
+  totalAmount: number
+}
+
+export interface VehicleFuelReport {
+  startDate: string
+  endDate: string
+  vehicles: FuelReportVehicle[]
 }
 
 export interface Conversion {
@@ -3141,6 +3188,39 @@ class AdminApiService {
     })
   }
 
+  // Records a stock movement against the audit ledger (parts_inventory_ledger)
+  // instead of silently overwriting the quantity — use this for any user-facing
+  // stock change so there's a "who/when/why" trail.
+  async recordInventoryTransaction(transaction: {
+    store_id: number
+    part_id: number
+    transaction_type: 'IN' | 'OUT' | 'ADJUSTMENT' | 'TRANSFER_IN' | 'TRANSFER_OUT'
+    quantity: number
+    reference_number?: string
+    notes?: string
+    created_by?: number
+  }): Promise<{ inventory: Inventory; ledger: PartLedgerEntry }> {
+    console.log('📦 [API] recordInventoryTransaction called', transaction.transaction_type, transaction.quantity, `store ${transaction.store_id}`, `part ${transaction.part_id}`)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      const now = new Date().toISOString()
+      return {
+        inventory: { id: Date.now(), store_id: transaction.store_id, part_id: transaction.part_id, quantity: transaction.quantity, last_updated: now },
+        ledger: {
+          id: Date.now(), inventory_id: Date.now(), store_id: transaction.store_id, part_id: transaction.part_id,
+          transaction_type: transaction.transaction_type, quantity: transaction.quantity,
+          previous_quantity: 0, new_quantity: transaction.quantity,
+          reference_number: transaction.reference_number || null, notes: transaction.notes || null,
+          created_by: transaction.created_by || null, created_at: now
+        }
+      }
+    }
+    return this.request<{ inventory: Inventory; ledger: PartLedgerEntry }>('/inventory/transaction', {
+      method: 'POST',
+      body: JSON.stringify(transaction)
+    })
+  }
+
   // Fuel Prices Management
   async createFuelPrice(fuelPriceData: Omit<FuelPrice, 'id' | 'created_at'>): Promise<FuelPrice> {
     if (USE_MOCK_DATA) {
@@ -3382,8 +3462,8 @@ class AdminApiService {
     })
   }
 
-  async getSales(stationId?: number, keyAccountId?: number): Promise<Sale[]> {
-    console.log('💰 [API] getSales called', stationId ? `for station: ${stationId}` : '', keyAccountId ? `for key account: ${keyAccountId}` : '')
+  async getSales(stationId?: number, keyAccountId?: number, conversionClientId?: number): Promise<Sale[]> {
+    console.log('💰 [API] getSales called', stationId ? `for station: ${stationId}` : '', keyAccountId ? `for key account: ${keyAccountId}` : '', conversionClientId ? `for conversion client: ${conversionClientId}` : '')
     if (USE_MOCK_DATA) {
       await new Promise(resolve => setTimeout(resolve, 500))
       return []
@@ -3391,9 +3471,32 @@ class AdminApiService {
     const params = new URLSearchParams()
     if (stationId) params.append('stationId', String(stationId))
     if (keyAccountId) params.append('keyAccountId', String(keyAccountId))
+    if (conversionClientId) params.append('conversionClientId', String(conversionClientId))
     const query = params.toString()
     const url = query ? `/sales?${query}` : '/sales'
     return this.request<Sale[]>(url)
+  }
+
+  async getWeeklySalesReport(startDate: string, endDate: string, stationId?: number): Promise<WeeklySalesReport> {
+    console.log('💰 [API] getWeeklySalesReport called', startDate, '→', endDate)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return { startDate, endDate, vehicles: [] }
+    }
+    const params = new URLSearchParams({ startDate, endDate })
+    if (stationId) params.append('stationId', String(stationId))
+    return this.request<WeeklySalesReport>(`/sales/report/weekly?${params.toString()}`)
+  }
+
+  async getVehicleFuelReport(startDate: string, endDate: string, stationId?: number): Promise<VehicleFuelReport> {
+    console.log('⛽ [API] getVehicleFuelReport called', startDate, '→', endDate)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return { startDate, endDate, vehicles: [] }
+    }
+    const params = new URLSearchParams({ startDate, endDate })
+    if (stationId) params.append('stationId', String(stationId))
+    return this.request<VehicleFuelReport>(`/sales/report/fuel?${params.toString()}`)
   }
 
   // Conversions Management

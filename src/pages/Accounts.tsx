@@ -8,6 +8,8 @@ import {
   BarChart3,
   ShoppingCart,
   Truck,
+  CalendarRange,
+  Fuel,
 } from 'lucide-react'
 
 interface AccountCard {
@@ -47,6 +49,24 @@ const CARDS: AccountCard[] = [
     route: '/sales/report',
     description: 'Analyze revenue, profit, and sales performance across clients, vehicles, and key accounts.',
     features: ['Revenue and profit trends', 'Sales rep performance', 'Key account breakdown', 'Date range filtering'],
+  },
+  {
+    slug: 'weekly-sales-report',
+    name: 'Weekly Sales Report',
+    icon: CalendarRange,
+    gradient: 'from-pink-500 to-pink-600',
+    route: '/sales/report/weekly',
+    description: 'Per-vehicle litres sold by week and day, grouped by Org/Sacco — matches the fleet weekly tracking sheet.',
+    features: ['Vehicle-by-vehicle breakdown', 'Weekly and daily totals', 'Org/Sacco grouping', 'CSV export'],
+  },
+  {
+    slug: 'vehicle-fuel-report',
+    name: 'Vehicle Fuel Report',
+    icon: Fuel,
+    gradient: 'from-teal-500 to-cyan-600',
+    route: '/sales/report/fuel',
+    description: 'Count how many times each vehicle has fueled and the total spent, and spot vehicles that are barely fueling.',
+    features: ['Per-vehicle fill counts', 'Weekly and daily breakdown', 'Low-fueling detection', 'CSV and PDF export'],
   },
   {
     slug: 'purchase-orders',

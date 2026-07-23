@@ -4,8 +4,10 @@ import { adminApiService, ConversionClient } from '../services/api'
 import { cloudinaryService } from '../services/cloudinary'
 import {
   ChevronLeft,
+  ChevronDown,
   ImageIcon,
   Loader2,
+  Sparkles,
   Hash,
   CreditCard,
   Car,
@@ -33,12 +35,19 @@ interface VehicleFormData {
   transmission_type: string
   driven_wheel: string
   engine: string
+  engine_capacity: string
+  engine_code: string
   current_odo: string
   odo_unit: 'KM' | 'Miles'
   color: string
   unit_number: string
+  tank_capacity: string
+  telemetry_status: string
   notes: string
 }
+
+const TANK_CAPACITIES = ['37L Internal', '42L Internal', '42L External', '92L']
+const TELEMETRY_STATUSES = ['Manual Tracking', 'OBD2 + TM', 'TM']
 
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024 // 10 MB — Cloudinary preset limit
 
@@ -58,6 +67,9 @@ const EditVehicle: React.FC = () => {
   const [logbookUrl, setLogbookUrl] = useState('')
   const [uploadingVsa, setUploadingVsa] = useState(false)
   const [uploadingLogbook, setUploadingLogbook] = useState(false)
+  const [analyzingImage, setAnalyzingImage] = useState(false)
+  const [notesExpanded, setNotesExpanded] = useState(true)
+  const notesRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const vsaInputRef = useRef<HTMLInputElement>(null)
   const logbookInputRef = useRef<HTMLInputElement>(null)
@@ -79,10 +91,14 @@ const EditVehicle: React.FC = () => {
           transmission_type:   data.transmission_type    ?? '',
           driven_wheel:        data.driven_wheel         ?? '',
           engine:              data.engine               ?? '',
+          engine_capacity:     data.engine_capacity      ?? '',
+          engine_code:         data.engine_code          ?? '',
           current_odo:         data.current_odo?.toString() ?? '',
           odo_unit:            data.odo_unit,
           color:               data.color                ?? '',
           unit_number:         data.unit_number          ?? '',
+          tank_capacity:       data.tank_capacity        ?? '',
+          telemetry_status:    data.telemetry_status     ?? '',
           notes:               data.notes                ?? '',
         })
         setPhotoUrls(data.photo_urls?.length ? data.photo_urls : (data.photo_url ? [data.photo_url] : []))
@@ -109,6 +125,15 @@ const EditVehicle: React.FC = () => {
     }
     fetchClients()
   }, [])
+
+  const notesIsFirstRender = useRef(true)
+  useEffect(() => {
+    if (notesIsFirstRender.current) {
+      notesIsFirstRender.current = false
+      return
+    }
+    if (notesExpanded) notesRef.current?.focus()
+  }, [notesExpanded])
 
   const set = (k: keyof VehicleFormData, v: string) =>
     setFormData(p => (p ? { ...p, [k]: v } : p))
@@ -162,6 +187,44 @@ const EditVehicle: React.FC = () => {
     }
   }
 
+  const handleAnalyzeImage = async () => {
+    const coverPhoto = photoUrls[0]
+    if (!coverPhoto) {
+      alert('Please upload a photo first')
+      return
+    }
+
+    setAnalyzingImage(true)
+    try {
+      const analysis = await adminApiService.analyzeVehicleImage(coverPhoto)
+
+      if (analysis && analysis.confidence !== 'low') {
+        setFormData(prev => prev ? {
+          ...prev,
+          vin_serial_number: analysis.vin_serial_number || prev.vin_serial_number,
+          registration_number: analysis.registration_number || prev.registration_number,
+          vehicle_type: analysis.vehicle_type || prev.vehicle_type,
+          year: analysis.year ? String(analysis.year) : prev.year,
+          make: analysis.make || prev.make,
+          model: analysis.model || prev.model,
+          trim_option: analysis.trim_option || prev.trim_option,
+          transmission_type: analysis.transmission_type || prev.transmission_type,
+          driven_wheel: analysis.driven_wheel || prev.driven_wheel,
+          engine: analysis.engine || prev.engine,
+          color: analysis.color || prev.color
+        } : prev)
+        alert(`Vehicle details identified! Confidence: ${analysis.confidence}\n\nFound: ${analysis.extractedDetails.join(', ')}`)
+      } else {
+        alert('Could not identify vehicle details from image (low confidence). Please enter details manually.')
+      }
+    } catch (error) {
+      console.error('❌ [EditVehicle] Vehicle image analysis failed:', error)
+      alert(`Failed to analyze image: ${(error as any).message || 'Unknown error'}\n\nPlease enter details manually.`)
+    } finally {
+      setAnalyzingImage(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData || !vehicleId) return
@@ -183,10 +246,14 @@ const EditVehicle: React.FC = () => {
         transmission_type:   formData.transmission_type   || undefined,
         driven_wheel:        formData.driven_wheel        || undefined,
         engine:              formData.engine              || undefined,
+        engine_capacity:     formData.engine_capacity     || undefined,
+        engine_code:         formData.engine_code         || undefined,
         current_odo:         formData.current_odo ? Number(formData.current_odo) : undefined,
         odo_unit:            formData.odo_unit,
         color:               formData.color               || undefined,
         unit_number:         formData.unit_number         || undefined,
+        tank_capacity:       formData.tank_capacity       || undefined,
+        telemetry_status:    formData.telemetry_status    || undefined,
         notes:               formData.notes               || undefined,
         photo_url:           photoUrls[0] || undefined,
         photo_urls:          photoUrls,
@@ -263,11 +330,31 @@ const EditVehicle: React.FC = () => {
             </div>
           </div>
 
-          {/* ── Photos ── */}
+          {/* ── Photos + AI identify ── */}
           <div className={section}>
-            <p className="text-xs font-semibold text-gray-900 mb-2.5">
-              Vehicle Photos {photoUrls.length > 0 && `(${photoUrls.length})`}
-            </p>
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-xs font-semibold text-gray-900">
+                Vehicle Photos {photoUrls.length > 0 && `(${photoUrls.length})`}
+              </p>
+              <button
+                type="button"
+                onClick={handleAnalyzeImage}
+                disabled={analyzingImage || !photoUrls[0]}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {analyzingImage ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Analyzing…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Identify Vehicle from Photo
+                  </>
+                )}
+              </button>
+            </div>
             <div className="flex flex-wrap gap-2">
               {photoUrls.map(url => (
                 <div key={url} className="relative w-20 h-16 rounded-xl overflow-hidden border border-gray-200 group">
@@ -408,6 +495,21 @@ const EditVehicle: React.FC = () => {
               Vehicle Details
             </div>
             <div className="space-y-3">
+              <div>
+                <label className={lbl}>Vehicle Type</label>
+                <input
+                  list="types-list"
+                  name="vehicle_type"
+                  value={formData.vehicle_type}
+                  onChange={handleChange}
+                  className={inpPlain}
+                  placeholder="Search type…"
+                />
+                <datalist id="types-list">
+                  {VEHICLE_TYPES.map(t => <option key={t} value={t} />)}
+                </datalist>
+              </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className={lbl}>Year</label>
@@ -451,7 +553,7 @@ const EditVehicle: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className={lbl}>Trim</label>
                   <input
@@ -465,37 +567,6 @@ const EditVehicle: React.FC = () => {
                   <datalist id="trims-list">
                     {TRIMS.map(t => <option key={t} value={t} />)}
                   </datalist>
-                </div>
-                <div>
-                  <label className={lbl}>Vehicle Type</label>
-                  <input
-                    list="types-list"
-                    name="vehicle_type"
-                    value={formData.vehicle_type}
-                    onChange={handleChange}
-                    className={inpPlain}
-                    placeholder="Search type…"
-                  />
-                  <datalist id="types-list">
-                    {VEHICLE_TYPES.map(t => <option key={t} value={t} />)}
-                  </datalist>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className={lbl}>Engine</label>
-                  <div className={iconWrap}>
-                    <Settings2 className={fieldIcon} />
-                    <input
-                      type="text"
-                      name="engine"
-                      value={formData.engine}
-                      onChange={handleChange}
-                      className={inp}
-                      placeholder="e.g. 5.6L V6"
-                    />
-                  </div>
                 </div>
                 <div>
                   <label className={lbl}>Transmission</label>
@@ -525,10 +596,55 @@ const EditVehicle: React.FC = () => {
                   </select>
                 </div>
               </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={lbl}>Engine</label>
+                  <div className={iconWrap}>
+                    <Settings2 className={fieldIcon} />
+                    <input
+                      type="text"
+                      name="engine"
+                      value={formData.engine}
+                      onChange={handleChange}
+                      className={inp}
+                      placeholder="e.g. 5.6L V6"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={lbl}>Engine Capacity</label>
+                  <div className={iconWrap}>
+                    <Gauge className={fieldIcon} />
+                    <input
+                      type="text"
+                      name="engine_capacity"
+                      value={formData.engine_capacity}
+                      onChange={handleChange}
+                      className={inp}
+                      placeholder="e.g. 2000cc"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={lbl}>Engine Code</label>
+                  <div className={iconWrap}>
+                    <Hash className={fieldIcon} />
+                    <input
+                      type="text"
+                      name="engine_code"
+                      value={formData.engine_code}
+                      onChange={handleChange}
+                      className={inp + ' uppercase'}
+                      placeholder="e.g. 1GR-FE"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* ── Odometer, Color & Unit ── */}
+          {/* ── Odometer, Appearance & Tracking ── */}
           <div className={section}>
             <div className={sectionTitle}>
               <Gauge className="h-3.5 w-3.5 text-green-600" />
@@ -582,26 +698,60 @@ const EditVehicle: React.FC = () => {
                   placeholder="Internal unit number"
                 />
               </div>
+              <div>
+                <label className={lbl}>Tank Capacity</label>
+                <select
+                  name="tank_capacity"
+                  value={formData.tank_capacity}
+                  onChange={handleChange}
+                  className={inpPlain}
+                >
+                  <option value="">Select tank capacity</option>
+                  {TANK_CAPACITIES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={lbl}>Telemetry Status</label>
+                <select
+                  name="telemetry_status"
+                  value={formData.telemetry_status}
+                  onChange={handleChange}
+                  className={inpPlain}
+                >
+                  <option value="">Select telemetry status</option>
+                  {TELEMETRY_STATUSES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
           </div>
 
           {/* ── Notes ── */}
           <div className={section}>
-            <div className="flex items-center justify-between mb-2.5">
+            <button
+              type="button"
+              onClick={() => setNotesExpanded(v => !v)}
+              className={`w-full flex items-center justify-between text-left ${notesExpanded ? 'mb-2.5' : ''}`}
+            >
               <div className={sectionTitle + ' mb-0'}>
                 <StickyNote className="h-3.5 w-3.5 text-green-600" />
                 Notes
               </div>
-              <span className="text-[10px] text-gray-400">Internal only — won't show up on invoices</span>
-            </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-400">Internal only — won't show up on invoices</span>
+                <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${notesExpanded ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+            {notesExpanded && (
             <textarea
+              ref={notesRef}
               name="notes"
               value={formData.notes}
               onChange={handleChange}
-              rows={2}
+              rows={22}
               className={inpPlain + ' resize-none'}
               placeholder="Enter any internal notes…"
             />
+            )}
           </div>
 
           {/* ── Actions ── */}

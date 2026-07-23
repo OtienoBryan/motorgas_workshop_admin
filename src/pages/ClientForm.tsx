@@ -6,11 +6,13 @@ import {
   Loader2,
   Building2,
   UserCheck,
+  Users,
   MapPin,
   Mail,
   Phone,
   Hash,
   Home,
+  StickyNote,
   MessageSquare,
   Settings2,
   Percent,
@@ -22,12 +24,25 @@ import {
 import { Client, REFERRAL_SOURCES, Toggle, mapConversionClient, buildClientPayload } from './Clients'
 
 const emptyForm: Partial<Client> = {
-  name: '', email: '', contact: '', address: '', region: '', category: 'individual', taxPin: '',
+  name: '', email: '', contact: '', address: '', notes: '', region: '', category: 'individual', taxPin: '',
+  organizationType: undefined, organizationName: '',
   referralSource: '', referralNotes: '',
   taxExempt: false, applyDiscount: false, discountRate: '',
   labourRateOverride: false, labourRate: '',
   partsMarkupOverride: false, partsMarkup: '',
   paymentTermsOverride: false, paymentTerms: '',
+}
+
+const ORG_NAME_LABELS: Record<'individual' | 'sacco' | 'company', string> = {
+  individual: 'Full Name', sacco: 'Sacco Name', company: 'Company Name',
+}
+const ORG_NAME_PLACEHOLDERS: Record<'individual' | 'sacco' | 'company', string> = {
+  individual: 'Enter full name', sacco: 'Enter sacco name', company: 'Enter company name',
+}
+const ORG_NAME_ICONS: Record<'individual' | 'sacco' | 'company', React.ReactNode> = {
+  individual: <UserCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />,
+  sacco: <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />,
+  company: <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />,
 }
 
 const ClientForm: React.FC = () => {
@@ -50,8 +65,9 @@ const ClientForm: React.FC = () => {
         const client = mapConversionClient(raw)
         setFormData({
           name: client.name, email: client.email || '', contact: client.contact,
-          address: client.address || '', region: client.region,
+          address: client.address || '', notes: client.notes || '', region: client.region,
           category: client.category, taxPin: client.taxPin || '',
+          organizationType: client.organizationType, organizationName: client.organizationName || '',
           referralSource: client.referralSource || '', referralNotes: client.referralNotes || '',
           taxExempt: !!client.taxExempt, applyDiscount: !!client.applyDiscount, discountRate: client.discountRate || '',
           labourRateOverride: !!client.labourRateOverride, labourRate: client.labourRate || '',
@@ -155,6 +171,41 @@ const ClientForm: React.FC = () => {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3 mb-2.5">
+                <div>
+                  <label className={lbl}>Organization Type <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <select
+                    value={formData.organizationType || ''}
+                    onChange={e => setFormData(p => ({
+                      ...p,
+                      organizationType: (e.target.value || undefined) as 'individual' | 'sacco' | 'company' | undefined,
+                      organizationName: e.target.value ? p.organizationName : '',
+                    }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-shadow text-gray-700"
+                  >
+                    <option value="">— None —</option>
+                    <option value="individual">Individual</option>
+                    <option value="sacco">Sacco</option>
+                    <option value="company">Company</option>
+                  </select>
+                </div>
+                {formData.organizationType && (
+                  <div>
+                    <label className={lbl}>
+                      {ORG_NAME_LABELS[formData.organizationType]}
+                      {formData.organizationType !== 'individual' && ' *'}
+                      {formData.organizationType === 'individual' && <span className="text-gray-400 font-normal"> (optional)</span>}
+                    </label>
+                    <div className={iconWrap}>
+                      {ORG_NAME_ICONS[formData.organizationType]}
+                      <input type="text" value={formData.organizationName || ''} required={formData.organizationType !== 'individual'}
+                        onChange={e => setFormData(p => ({ ...p, organizationName: e.target.value }))}
+                        className={inp} placeholder={ORG_NAME_PLACEHOLDERS[formData.organizationType]} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className={lbl}>{isCompany ? 'Company Name' : 'Full Name'} *</label>
@@ -213,6 +264,16 @@ const ClientForm: React.FC = () => {
                       className={inp + ' resize-none'} placeholder="Street address…" />
                   </div>
                 </div>
+
+                <div className="col-span-2">
+                  <label className={lbl}>Notes <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <div className={iconWrap}>
+                    <StickyNote className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 pointer-events-none" />
+                    <textarea name="notes" rows={2} value={formData.notes || ''}
+                      onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
+                      className={inp + ' resize-none'} placeholder="Internal notes about this client…" />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -238,7 +299,7 @@ const ClientForm: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className={lbl}>Notes <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <label className={lbl}>Referral Notes <span className="text-gray-400 font-normal">(optional)</span></label>
                     <input type="text" value={formData.referralNotes || ''}
                       onChange={e => setFormData(p => ({ ...p, referralNotes: e.target.value }))}
                       className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-shadow placeholder:text-gray-400"

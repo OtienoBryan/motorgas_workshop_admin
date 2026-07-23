@@ -13,7 +13,6 @@ import {
   Car,
   Gauge,
   Wrench,
-  StickyNote,
   Hash,
   Palette,
   Activity,
@@ -80,7 +79,7 @@ export interface Vehicle {
   conversionClient?: ConversionClient
 }
 
-type Tab = 'owner' | 'estimates' | 'invoices' | 'inspections' | 'history' | 'deferred' | 'notes' | 'qrcode'
+type Tab = 'owner' | 'estimates' | 'invoices' | 'inspections' | 'history' | 'deferred' | 'qrcode'
 
 const INSPECTION_STATUS_STYLES: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -267,7 +266,6 @@ const VehicleDetails: React.FC = () => {
     { id: 'inspections', label: 'Inspections', icon: <ClipboardCheck className="h-3.5 w-3.5" /> },
     { id: 'history',     label: 'History',     icon: <HistoryIcon className="h-3.5 w-3.5" /> },
     { id: 'deferred',    label: 'Deferred',    icon: <Clock className="h-3.5 w-3.5" /> },
-    { id: 'notes',       label: 'Notes',       icon: <StickyNote className="h-3.5 w-3.5" /> },
     { id: 'qrcode',      label: 'QR Code',     icon: <QrCode className="h-3.5 w-3.5" /> },
   ]
 
@@ -428,34 +426,50 @@ const VehicleDetails: React.FC = () => {
 
             {/* Owner */}
             {activeTab === 'owner' && (
-              vehicle.conversionClient ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-gray-900">{vehicle.conversionClient.name}</h3>
-                      <span className="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-[10px] font-medium bg-violet-100 text-violet-700 capitalize">
-                        {vehicle.conversionClient.category}
-                      </span>
+              <div className="space-y-6">
+                {vehicle.conversionClient ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-900">{vehicle.conversionClient.name}</h3>
+                        <span className="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-[10px] font-medium bg-violet-100 text-violet-700 capitalize">
+                          {vehicle.conversionClient.category}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => navigate(`/clients/${clientId}`)}
+                        className="px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        View Client Profile
+                      </button>
                     </div>
-                    <button
-                      onClick={() => navigate(`/clients/${clientId}`)}
-                      className="px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      View Client Profile
-                    </button>
+                    <div className="grid grid-cols-2 divide-x divide-y divide-gray-50 border border-gray-100 rounded-xl overflow-hidden">
+                      <SpecCell icon={<Phone className="h-3.5 w-3.5" />}      label="Phone"        value={vehicle.conversionClient.contact} />
+                      <SpecCell icon={<Mail className="h-3.5 w-3.5" />}      label="Email"        value={vehicle.conversionClient.email || undefined} />
+                      <SpecCell icon={<MapPin className="h-3.5 w-3.5" />}    label="Region"       value={vehicle.conversionClient.region || undefined} />
+                      <SpecCell icon={<MapPin className="h-3.5 w-3.5" />}    label="Address"      value={vehicle.conversionClient.address || undefined} />
+                      <SpecCell icon={<Hash className="h-3.5 w-3.5" />}      label="Tax PIN"      value={vehicle.conversionClient.tax_pin || undefined} mono />
+                      <SpecCell icon={<CreditCard className="h-3.5 w-3.5" />} label="Account No."  value={vehicle.conversionClient.account_number} mono />
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 divide-x divide-y divide-gray-50 border border-gray-100 rounded-xl overflow-hidden">
-                    <SpecCell icon={<Phone className="h-3.5 w-3.5" />}      label="Phone"        value={vehicle.conversionClient.contact} />
-                    <SpecCell icon={<Mail className="h-3.5 w-3.5" />}      label="Email"        value={vehicle.conversionClient.email || undefined} />
-                    <SpecCell icon={<MapPin className="h-3.5 w-3.5" />}    label="Region"       value={vehicle.conversionClient.region || undefined} />
-                    <SpecCell icon={<MapPin className="h-3.5 w-3.5" />}    label="Address"      value={vehicle.conversionClient.address || undefined} />
-                    <SpecCell icon={<Hash className="h-3.5 w-3.5" />}      label="Tax PIN"      value={vehicle.conversionClient.tax_pin || undefined} mono />
-                    <SpecCell icon={<CreditCard className="h-3.5 w-3.5" />} label="Account No."  value={vehicle.conversionClient.account_number} mono />
+                ) : (
+                  <EmptyTab icon={<User className="h-5 w-5 text-gray-300" />} title="No owner on record" subtitle="This vehicle has no linked client" />
+                )}
+
+                {/* Notes (moved here from the removed Notes tab) */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-bold text-gray-900">Internal Notes</h2>
+                    <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-medium">
+                      Not visible to client
+                    </span>
                   </div>
+                  {vehicle.notes
+                    ? <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{vehicle.notes}</p>
+                    : <p className="text-xs text-gray-400 italic">No notes added for this vehicle.</p>
+                  }
                 </div>
-              ) : (
-                <EmptyTab icon={<User className="h-5 w-5 text-gray-300" />} title="No owner on record" subtitle="This vehicle has no linked client" />
-              )
+              </div>
             )}
 
             {/* Quotations — placeholder */}
@@ -710,22 +724,6 @@ const VehicleDetails: React.FC = () => {
             {activeTab === 'deferred' && (
               <EmptyTab icon={<Clock className="h-5 w-5 text-gray-300" />}
                 title="No deferred work" subtitle="Work deferred from quotations or inspections will appear here" />
-            )}
-
-            {/* Notes */}
-            {activeTab === 'notes' && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-bold text-gray-900">Internal Notes</h2>
-                  <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-medium">
-                    Not visible to client
-                  </span>
-                </div>
-                {vehicle.notes
-                  ? <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{vehicle.notes}</p>
-                  : <p className="text-xs text-gray-400 italic">No notes added for this vehicle.</p>
-                }
-              </div>
             )}
 
             {/* QR Code */}

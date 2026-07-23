@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { adminApiService, Sale, Station, KeyAccount, Vehicle, Staff } from '../services/api'
-import { 
+import { adminApiService, Sale, Station, KeyAccount, ConversionClient, Vehicle, Staff } from '../services/api'
+import {
   ArrowLeft,
   Search,
   Download,
   DollarSign,
-  Package,
-  TrendingUp
+  Fuel,
+  Receipt,
+  TrendingUp,
+  Truck
 } from 'lucide-react'
 
 const SalesReport: React.FC = () => {
@@ -19,6 +21,7 @@ const SalesReport: React.FC = () => {
   const [sales, setSales] = useState<Sale[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [keyAccounts, setKeyAccounts] = useState<KeyAccount[]>([])
+  const [conversionClients, setConversionClients] = useState<ConversionClient[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,23 +29,33 @@ const SalesReport: React.FC = () => {
   const [selectedStationId, setSelectedStationId] = useState<number | null>(
     stationIdParam ? Number(stationIdParam) : null
   )
-  const [selectedKeyAccountId, setSelectedKeyAccountId] = useState<number | null>(
-    keyAccountIdParam ? Number(keyAccountIdParam) : null
+  // Encodes which client list the selection came from, e.g. "ka-5" or "cc-12" —
+  // most sales are linked via conversion_client_id, not key_account_id, and the
+  // two id spaces are independent, so the selected value must carry its type.
+  const [selectedClientFilter, setSelectedClientFilter] = useState<string>(
+    keyAccountIdParam ? `ka-${keyAccountIdParam}` : ''
   )
+  const selectedKeyAccountId = selectedClientFilter.startsWith('ka-')
+    ? Number(selectedClientFilter.slice(3))
+    : null
+  const selectedConversionClientId = selectedClientFilter.startsWith('cc-')
+    ? Number(selectedClientFilter.slice(3))
+    : null
 
   useEffect(() => {
     fetchSales()
     fetchStations()
     fetchKeyAccounts()
+    fetchConversionClients()
     fetchStaff()
-  }, [selectedStationId, selectedKeyAccountId])
+  }, [selectedStationId, selectedClientFilter])
 
   useEffect(() => {
     if (selectedKeyAccountId) {
       fetchVehicles(selectedKeyAccountId)
     }
   }, [selectedKeyAccountId])
-  
+
   // Fetch vehicles when sales are loaded (as fallback if relations aren't included)
   useEffect(() => {
     if (!selectedKeyAccountId && sales.length > 0) {
@@ -58,7 +71,11 @@ const SalesReport: React.FC = () => {
     try {
       console.log('💰 [SalesReport] Fetching sales...')
       setLoading(true)
-      const data = await adminApiService.getSales(selectedStationId || undefined, selectedKeyAccountId || undefined)
+      const data = await adminApiService.getSales(
+        selectedStationId || undefined,
+        selectedKeyAccountId || undefined,
+        selectedConversionClientId || undefined
+      )
       console.log('✅ [SalesReport] Sales fetched:', data)
       setSales(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -110,6 +127,16 @@ const SalesReport: React.FC = () => {
     }
   }
 
+  const fetchConversionClients = async () => {
+    try {
+      const data = await adminApiService.getConversionClients()
+      setConversionClients(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('❌ [SalesReport] Error fetching conversion clients:', error)
+      setConversionClients([])
+    }
+  }
+
   const fetchVehicles = async (keyAccountId: number) => {
     try {
       const data = await adminApiService.getVehiclesByKeyAccount(keyAccountId)
@@ -141,12 +168,25 @@ const SalesReport: React.FC = () => {
     return account?.name || 'Unknown Account'
   }
 
+  // Owner can come from either the regular key-account flow or a
+  // conversion-client sale (conversion_client_id / conversion_vehicle_id) —
+  // most current sales are conversion-linked, so fall back to that.
+  const getOwnerName = (sale: Sale) => {
+    if (sale.keyAccountId) return getKeyAccountName(sale.keyAccountId)
+    if (sale.conversionClient) return sale.conversionClient.name
+    if (sale.conversionClientId) return 'Unknown Client'
+    return '-'
+  }
+
   const getVehicleName = (sale: Sale) => {
     // First check if vehicle data is already in the sale object (from API relations)
     if (sale.vehicle) {
       return `${sale.vehicle.registration_number} - ${sale.vehicle.model}`
     }
-    
+    if (sale.conversionVehicle) {
+      return `${sale.conversionVehicle.registration_number} - ${sale.conversionVehicle.model}`
+    }
+
     // Fallback to looking up by ID
     if (!sale.vehicleId) return '-'
     const vehicle = vehicles.find(v => v.id === sale.vehicleId)
@@ -195,12 +235,12 @@ const SalesReport: React.FC = () => {
     const headers = [
       'Sale Date',
       'Station',
-      'Client Type',
-      'Key Account',
+      'Client',
       'Vehicle',
       'Quantity',
       'Unit Price',
       'Total Amount',
+      'Payment Method',
       'Reference Number',
       'Staff',
       'Notes',
@@ -210,12 +250,12 @@ const SalesReport: React.FC = () => {
     const rows = filteredSales.map(sale => [
       formatDateForCSV(sale.saleDate),
       escapeCSV(getStationName(sale.stationId)),
-      escapeCSV(sale.clientType),
-      escapeCSV(getKeyAccountName(sale.keyAccountId)),
+      escapeCSV(getOwnerName(sale)),
       escapeCSV(getVehicleName(sale)),
       Number(sale.quantity).toFixed(2),
       Number(sale.unitPrice).toFixed(2),
       Number(sale.totalAmount).toFixed(2),
+      escapeCSV(sale.paymentMethod || ''),
       escapeCSV(sale.referenceNumber || ''),
       escapeCSV(getStaffName(sale.createdBy)),
       escapeCSV(sale.notes || ''),
@@ -238,8 +278,13 @@ const SalesReport: React.FC = () => {
     const stationName = selectedStationId 
       ? `-${getStationName(selectedStationId).replace(/\s+/g, '-')}` 
       : ''
-    const accountName = selectedKeyAccountId 
-      ? `-${getKeyAccountName(selectedKeyAccountId)?.replace(/\s+/g, '-')}` 
+    const selectedClientName = selectedKeyAccountId
+      ? getKeyAccountName(selectedKeyAccountId)
+      : selectedConversionClientId
+        ? conversionClients.find(c => c.id === selectedConversionClientId)?.name
+        : null
+    const accountName = selectedClientName
+      ? `-${selectedClientName.replace(/\s+/g, '-')}`
       : ''
     const filename = `sales-report${stationName}${accountName}-${dateStr}.csv`
     
@@ -256,7 +301,7 @@ const SalesReport: React.FC = () => {
   const filteredSales = sales.filter(sale => {
     const matchesSearch = 
       getStationName(sale.stationId).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getKeyAccountName(sale.keyAccountId).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getOwnerName(sale).toLowerCase().includes(searchTerm.toLowerCase()) ||
       getVehicleName(sale).toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.referenceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -270,11 +315,18 @@ const SalesReport: React.FC = () => {
   const totalQuantity = filteredSales.reduce((sum, s) => sum + Number(s.quantity), 0)
   const totalRevenue = filteredSales.reduce((sum, s) => sum + Number(s.totalAmount), 0)
   const averagePrice = totalQuantity > 0 ? totalRevenue / totalQuantity : 0
+  // vehicleId and conversionVehicleId are independent id spaces, so a plain
+  // numeric Set would collide a regular vehicle #8 with a conversion vehicle #8
+  const uniqueVehicleCount = new Set(
+    filteredSales
+      .map(s => s.vehicleId ? `v-${s.vehicleId}` : s.conversionVehicleId ? `cv-${s.conversionVehicleId}` : null)
+      .filter((key): key is string => key !== null)
+  ).size
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-2">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-full mx-auto">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
@@ -285,7 +337,7 @@ const SalesReport: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-2">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-full mx-auto">
         {/* Header */}
         <div className="mb-2 flex items-center gap-2">
           <button
@@ -295,20 +347,34 @@ const SalesReport: React.FC = () => {
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <h1 className="text-xs font-bold text-gray-900">Sales Report</h1>
+          <h1 className="text-sm font-bold text-gray-900">Sales Report</h1>
+          <button
+            onClick={() => navigate('/sales/report/weekly')}
+            className="ml-auto flex items-center gap-1 px-2 py-1 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700"
+          >
+            <TrendingUp className="h-3 w-3" />
+            Weekly Report
+          </button>
+          <button
+            onClick={() => navigate('/sales/report/fuel')}
+            className="flex items-center gap-1 px-2 py-1 text-[11px] bg-teal-600 text-white rounded hover:bg-teal-700"
+          >
+            <Fuel className="h-3 w-3" />
+            Fuel Report
+          </button>
         </div>
 
         {/* Filters and Summary */}
         <div className="mb-2 space-y-2">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
             <div>
-              <label className="block text-[10px] font-medium text-gray-700 mb-0.5">
+              <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
                 Filter by Station
               </label>
               <select
                 value={selectedStationId || ''}
                 onChange={(e) => setSelectedStationId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-1.5 py-0.5 text-[10px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-1.5 py-0.5 text-[11px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Stations</option>
                 {stations.map((station) => (
@@ -319,26 +385,24 @@ const SalesReport: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-medium text-gray-700 mb-0.5">
-                Filter by Key Account
+              <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
+                Filter by Client
               </label>
               <select
-                value={selectedKeyAccountId || ''}
-                onChange={(e) => setSelectedKeyAccountId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-1.5 py-0.5 text-[10px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                value={selectedClientFilter}
+                onChange={(e) => setSelectedClientFilter(e.target.value)}
+                className="w-full px-1.5 py-0.5 text-[11px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">All Key Accounts</option>
-                {keyAccounts
-                  .filter(ka => ka.is_active === 1)
-                  .map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
+                <option value="">All Clients</option>
+                {conversionClients.map((client) => (
+                  <option key={`cc-${client.id}`} value={`cc-${client.id}`}>
+                    {client.name}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-medium text-gray-700 mb-0.5">
+              <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
                 Search
               </label>
               <div className="relative">
@@ -348,7 +412,7 @@ const SalesReport: React.FC = () => {
                   placeholder="Search by station, account, vehicle, reference..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-6 pr-1.5 py-0.5 text-[10px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-6 pr-1.5 py-0.5 text-[11px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -356,7 +420,7 @@ const SalesReport: React.FC = () => {
               <button
                 onClick={exportToCSV}
                 disabled={filteredSales.length === 0}
-                className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[10px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[11px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 title={filteredSales.length === 0 ? 'No data to export' : 'Export to CSV'}
               >
                 <Download className="h-3 w-3" />
@@ -366,22 +430,51 @@ const SalesReport: React.FC = () => {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-4 gap-2">
-            <div className="bg-white rounded border p-2">
-              <div className="text-[9px] text-gray-600 mb-0.5">Total Sales</div>
-              <div className="text-[11px] font-bold text-blue-600">{totalSales}</div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="bg-white rounded-lg border border-gray-200 p-2.5 flex items-center gap-2.5">
+              <div className="shrink-0 h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                <Receipt className="h-4 w-4 text-blue-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] text-gray-500 font-medium truncate">Total sales</div>
+                <div className="text-sm font-bold text-gray-900 truncate">{totalSales}</div>
+              </div>
             </div>
-            <div className="bg-white rounded border p-2">
-              <div className="text-[9px] text-gray-600 mb-0.5">Total Quantity</div>
-              <div className="text-[11px] font-bold text-green-600">{totalQuantity.toFixed(2)} L</div>
+            <div className="bg-white rounded-lg border border-gray-200 p-2.5 flex items-center gap-2.5">
+              <div className="shrink-0 h-8 w-8 rounded-lg bg-orange-50 flex items-center justify-center">
+                <Fuel className="h-4 w-4 text-orange-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] text-gray-500 font-medium truncate">Total quantity</div>
+                <div className="text-sm font-bold text-gray-900 truncate">{totalQuantity.toFixed(2)} L</div>
+              </div>
             </div>
-            <div className="bg-white rounded border p-2">
-              <div className="text-[9px] text-gray-600 mb-0.5">Total Revenue</div>
-              <div className="text-[11px] font-bold text-purple-600">{totalRevenue.toFixed(2)}</div>
+            <div className="bg-white rounded-lg border border-gray-200 p-2.5 flex items-center gap-2.5">
+              <div className="shrink-0 h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <DollarSign className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] text-gray-500 font-medium truncate">Total revenue</div>
+                <div className="text-sm font-bold text-gray-900 truncate">{totalRevenue.toFixed(2)}</div>
+              </div>
             </div>
-            <div className="bg-white rounded border p-2">
-              <div className="text-[9px] text-gray-600 mb-0.5">Average Price</div>
-              <div className="text-[11px] font-bold text-orange-600">{averagePrice.toFixed(2)}</div>
+            <div className="bg-white rounded-lg border border-gray-200 p-2.5 flex items-center gap-2.5">
+              <div className="shrink-0 h-8 w-8 rounded-lg bg-violet-50 flex items-center justify-center">
+                <TrendingUp className="h-4 w-4 text-violet-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] text-gray-500 font-medium truncate">Average price</div>
+                <div className="text-sm font-bold text-gray-900 truncate">{averagePrice.toFixed(2)}</div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-2.5 flex items-center gap-2.5">
+              <div className="shrink-0 h-8 w-8 rounded-lg bg-cyan-50 flex items-center justify-center">
+                <Truck className="h-4 w-4 text-cyan-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] text-gray-500 font-medium truncate">Unique vehicles</div>
+                <div className="text-sm font-bold text-gray-900 truncate">{uniqueVehicleCount}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -389,7 +482,7 @@ const SalesReport: React.FC = () => {
         {/* Sales Table */}
         <div className="bg-white rounded border overflow-hidden">
           {filteredSales.length === 0 ? (
-            <div className="text-center py-8 text-[10px] text-gray-500">
+            <div className="text-center py-8 text-[11px] text-gray-500">
               No sales found
             </div>
           ) : (
@@ -397,41 +490,33 @@ const SalesReport: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-700">Sale Date</th>
-                    <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-700">Station</th>
-                    <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-700">Client Type</th>
-                    <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-700">Key Account</th>
-                    <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-700">Vehicle</th>
-                    <th className="px-2 py-1 text-right text-[10px] font-medium text-gray-700">Quantity</th>
-                    <th className="px-2 py-1 text-right text-[10px] font-medium text-gray-700">Unit Price</th>
-                    <th className="px-2 py-1 text-right text-[10px] font-medium text-gray-700">Total Amount</th>
-                    <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-700">Reference</th>
-                    <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-700">Staff</th>
-                    <th className="px-2 py-1 text-left text-[10px] font-medium text-gray-700">Notes</th>
+                    <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Sale Date</th>
+                    <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Station</th>
+                    <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Client</th>
+                    <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Vehicle</th>
+                    <th className="px-2 py-1 text-right text-[11px] font-medium text-gray-700">Quantity</th>
+                    <th className="px-2 py-1 text-right text-[11px] font-medium text-gray-700">Unit Price</th>
+                    <th className="px-2 py-1 text-right text-[11px] font-medium text-gray-700">Total Amount</th>
+                    <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Payment Method</th>
+                    <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Reference</th>
+                    <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Staff</th>
+                    <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Notes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredSales.map((sale) => (
                     <tr key={sale.id} className="hover:bg-gray-50">
-                      <td className="px-2 py-1 text-[10px]">{formatDate(sale.saleDate)}</td>
-                      <td className="px-2 py-1 text-[10px] font-medium">{getStationName(sale.stationId)}</td>
-                      <td className="px-2 py-1 text-[10px]">
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${
-                          sale.clientType === 'key_account' 
-                            ? 'text-blue-600 bg-blue-50' 
-                            : 'text-gray-600 bg-gray-50'
-                        }`}>
-                          {sale.clientType === 'key_account' ? 'Key Account' : 'Regular'}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1 text-[10px] text-gray-600">{getKeyAccountName(sale.keyAccountId)}</td>
-                      <td className="px-2 py-1 text-[10px] text-gray-600">{getVehicleName(sale)}</td>
-                      <td className="px-2 py-1 text-[10px] text-right font-medium">{Number(sale.quantity).toFixed(2)} L</td>
-                      <td className="px-2 py-1 text-[10px] text-right">{Number(sale.unitPrice).toFixed(2)}</td>
-                      <td className="px-2 py-1 text-[10px] text-right font-bold text-purple-600">{Number(sale.totalAmount).toFixed(2)}</td>
-                      <td className="px-2 py-1 text-[10px] text-gray-600">{sale.referenceNumber || '-'}</td>
-                      <td className="px-2 py-1 text-[10px] text-gray-600">{getStaffName(sale.createdBy)}</td>
-                      <td className="px-2 py-1 text-[10px] text-gray-600 max-w-xs truncate">{sale.notes || '-'}</td>
+                      <td className="px-2 py-1 text-[11px]">{formatDate(sale.saleDate)}</td>
+                      <td className="px-2 py-1 text-[11px] font-medium">{getStationName(sale.stationId)}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-600">{getOwnerName(sale)}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-600">{getVehicleName(sale)}</td>
+                      <td className="px-2 py-1 text-[11px] text-right font-medium">{Number(sale.quantity).toFixed(2)} L</td>
+                      <td className="px-2 py-1 text-[11px] text-right">{Number(sale.unitPrice).toFixed(2)}</td>
+                      <td className="px-2 py-1 text-[11px] text-right font-bold text-purple-600">{Number(sale.totalAmount).toFixed(2)}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-600">{sale.paymentMethod || '-'}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-600">{sale.referenceNumber || '-'}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-600">{getStaffName(sale.createdBy)}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-600 max-w-xs truncate">{sale.notes || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
