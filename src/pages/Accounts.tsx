@@ -10,6 +10,7 @@ import {
   Truck,
   CalendarRange,
   Fuel,
+  Receipt,
 } from 'lucide-react'
 
 interface AccountCard {
@@ -51,8 +52,17 @@ const CARDS: AccountCard[] = [
     features: ['Revenue and profit trends', 'Sales rep performance', 'Key account breakdown', 'Date range filtering'],
   },
   {
+    slug: 'sales-summary-report',
+    name: 'Sales Summary',
+    icon: Receipt,
+    gradient: 'from-indigo-500 to-indigo-600',
+    route: '/sales/report/summary',
+    description: 'Monthly sales totals per station, broken down by payment method (Cash, Card, Mpesa, Credit, Other) and quantity sold.',
+    features: ['Per-station breakdown', 'Payment method columns', 'Quantity sold', 'CSV export'],
+  },
+  {
     slug: 'weekly-sales-report',
-    name: 'Weekly Sales Report',
+    name: 'Performance Report',
     icon: CalendarRange,
     gradient: 'from-pink-500 to-pink-600',
     route: '/sales/report/weekly',

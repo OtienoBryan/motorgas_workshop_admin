@@ -10,6 +10,8 @@ import {
   Plus
 } from 'lucide-react'
 
+const STAFF_ROLES = ['staff', 'manager', 'executive']
+
 // Avatar component for staff without images
 const StaffAvatar: React.FC<{ name: string; className?: string }> = ({ name, className = "h-10 w-10" }) => {
   const initials = name
@@ -47,7 +49,8 @@ const StaffPage: React.FC = () => {
     department: '',
     department_id: 0,
     employment_type: 'Contract',
-    gender: 'Male' as 'Male' | 'Female' | 'Other'
+    gender: 'Male' as 'Male' | 'Female' | 'Other',
+    role: 'staff'
   })
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -139,6 +142,7 @@ const StaffPage: React.FC = () => {
       empl_no: staffMember.empl_no,
       id_no: staffMember.id_no,
       designation: staffMember.designation,
+      role: staffMember.role,
       phone_number: staffMember.phone_number,
       department: staffMember.department,
       department_id: staffMember.department_id,
@@ -293,7 +297,7 @@ const StaffPage: React.FC = () => {
         name: addForm.name,
         empl_no: addForm.empl_no,
         id_no: addForm.id_no,
-        role: '', // Role field is required but we're not using it
+        role: addForm.role || 'staff',
         photo_url: photoUrl,
         avatar_url: photoUrl,
         designation: '',
@@ -320,7 +324,8 @@ const StaffPage: React.FC = () => {
         department: '',
         department_id: 0,
         employment_type: 'Contract',
-        gender: 'Male'
+        gender: 'Male',
+        role: 'staff'
       })
       setAddImagePreview(null)
       setAddImageFile(null)
@@ -341,7 +346,8 @@ const StaffPage: React.FC = () => {
       department: '',
       department_id: 0,
       employment_type: 'Contract',
-      gender: 'Male'
+      gender: 'Male',
+      role: 'staff'
     })
     setAddImagePreview(null)
     setAddImageFile(null)
@@ -858,6 +864,19 @@ const StaffPage: React.FC = () => {
                       />
                     </div>
                     <div>
+                      <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Role</label>
+                      <select
+                        value={editForm.role || ''}
+                        onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                        className="w-full px-2 py-1 text-[11px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select Role</option>
+                        {STAFF_ROLES.map(r => (
+                          <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
                       <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Department</label>
                       <select
                         value={editForm.department || ''}
@@ -1042,6 +1061,18 @@ const StaffPage: React.FC = () => {
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                         <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-gray-700 mb-0.5">Role</label>
+                      <select
+                        value={addForm.role}
+                        onChange={(e) => setAddForm({ ...addForm, role: e.target.value })}
+                        className="w-full px-2 py-1 text-[11px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        {STAFF_ROLES.map(r => (
+                          <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+                        ))}
                       </select>
                     </div>
                   </div>

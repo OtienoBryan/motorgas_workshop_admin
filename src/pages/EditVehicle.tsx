@@ -42,14 +42,25 @@ interface VehicleFormData {
   color: string
   unit_number: string
   tank_capacity: string
+  tank_year_of_production: string
+  tank_serial_number: string
+  kit_serial_number: string
   telemetry_status: string
   notes: string
+}
+
+interface DocumentItem {
+  id: string
+  title: string
+  url: string
 }
 
 const TANK_CAPACITIES = ['37L Internal', '42L Internal', '42L External', '92L']
 const TELEMETRY_STATUSES = ['Manual Tracking', 'OBD2 + TM', 'TM']
 
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024 // 10 MB — Cloudinary preset limit
+
+const genId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2))
 
 const EditVehicle: React.FC = () => {
   const navigate = useNavigate()
@@ -63,16 +74,14 @@ const EditVehicle: React.FC = () => {
   const [selectedClientId, setSelectedClientId] = useState('')
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const [vsaUrl, setVsaUrl] = useState('')
-  const [logbookUrl, setLogbookUrl] = useState('')
-  const [uploadingVsa, setUploadingVsa] = useState(false)
-  const [uploadingLogbook, setUploadingLogbook] = useState(false)
+  const [documents, setDocuments] = useState<DocumentItem[]>([])
+  const [uploadingDocs, setUploadingDocs] = useState<Record<string, boolean>>({})
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null)
   const [analyzingImage, setAnalyzingImage] = useState(false)
   const [notesExpanded, setNotesExpanded] = useState(true)
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const vsaInputRef = useRef<HTMLInputElement>(null)
-  const logbookInputRef = useRef<HTMLInputElement>(null)
+  const docInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!vehicleId) return
@@ -98,12 +107,21 @@ const EditVehicle: React.FC = () => {
           color:               data.color                ?? '',
           unit_number:         data.unit_number          ?? '',
           tank_capacity:       data.tank_capacity        ?? '',
+          tank_year_of_production: data.tank_year_of_production?.toString() ?? '',
+          tank_serial_number:  data.tank_serial_number   ?? '',
+          kit_serial_number:   data.kit_serial_number    ?? '',
           telemetry_status:    data.telemetry_status     ?? '',
           notes:               data.notes                ?? '',
         })
         setPhotoUrls(data.photo_urls?.length ? data.photo_urls : (data.photo_url ? [data.photo_url] : []))
-        setVsaUrl(data.vsa_url ?? '')
-        setLogbookUrl(data.logbook_url ?? '')
+        if (data.documents?.length) {
+          setDocuments(data.documents.map(d => ({ id: genId(), title: d.title, url: d.url })))
+        } else {
+          const legacyDocs: DocumentItem[] = []
+          if (data.vsa_url) legacyDocs.push({ id: genId(), title: 'VSA', url: data.vsa_url })
+          if (data.logbook_url) legacyDocs.push({ id: genId(), title: 'Logbook', url: data.logbook_url })
+          setDocuments(legacyDocs)
+        }
         setSelectedClientId(String(data.conversion_client_id))
       }
       setLoading(false)
@@ -167,23 +185,37 @@ const EditVehicle: React.FC = () => {
     setPhotoUrls(prev => prev.filter(u => u !== url))
   }
 
-  const handleDocumentSelect = async (kind: 'vsa' | 'logbook', file: File) => {
-    const label = kind === 'vsa' ? 'VSA' : 'logbook'
+  const handleAddDocumentRow = () => {
+    setDocuments(prev => [...prev, { id: genId(), title: '', url: '' }])
+  }
+
+  const handleDocTitleChange = (id: string, title: string) => {
+    setDocuments(prev => prev.map(d => d.id === id ? { ...d, title } : d))
+  }
+
+  const handleRemoveDocumentRow = (id: string) => {
+    setDocuments(prev => prev.filter(d => d.id !== id))
+  }
+
+  const triggerDocUpload = (id: string) => {
+    setPendingDocId(id)
+    docInputRef.current?.click()
+  }
+
+  const handleDocumentUpload = async (id: string, file: File) => {
     if (file.size > MAX_DOCUMENT_SIZE) {
-      alert(`${label} file is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed is 10 MB.`)
+      alert(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed is 10 MB.`)
       return
     }
-    const setUploading = kind === 'vsa' ? setUploadingVsa : setUploadingLogbook
-    const setUrl = kind === 'vsa' ? setVsaUrl : setLogbookUrl
-    setUploading(true)
+    setUploadingDocs(prev => ({ ...prev, [id]: true }))
     try {
-      const result = await cloudinaryService.uploadDocument(file, { folder: `vehicle-${kind}` })
-      setUrl(result.secure_url)
+      const result = await cloudinaryService.uploadDocument(file, { folder: 'vehicle-documents' })
+      setDocuments(prev => prev.map(d => d.id === id ? { ...d, url: result.secure_url } : d))
     } catch (error) {
-      console.error(`${kind.toUpperCase()} upload failed:`, error)
-      alert(`Failed to upload ${label}: ${(error as any).message || 'Unknown error'}`)
+      console.error('Document upload failed:', error)
+      alert(`Failed to upload document: ${(error as any).message || 'Unknown error'}`)
     } finally {
-      setUploading(false)
+      setUploadingDocs(prev => ({ ...prev, [id]: false }))
     }
   }
 
@@ -234,6 +266,9 @@ const EditVehicle: React.FC = () => {
     }
     try {
       setSaving(true)
+      const validDocs = documents
+        .filter(d => d.url)
+        .map(({ title, url }) => ({ title: title.trim() || 'Document', url }))
       await adminApiService.updateConversionVehicle(Number(vehicleId), {
         conversion_client_id: Number(selectedClientId),
         registration_number: formData.registration_number,
@@ -253,12 +288,14 @@ const EditVehicle: React.FC = () => {
         color:               formData.color               || undefined,
         unit_number:         formData.unit_number         || undefined,
         tank_capacity:       formData.tank_capacity       || undefined,
+        tank_year_of_production: formData.tank_year_of_production ? Number(formData.tank_year_of_production) : undefined,
+        tank_serial_number:  formData.tank_serial_number  || undefined,
+        kit_serial_number:   formData.kit_serial_number   || undefined,
         telemetry_status:    formData.telemetry_status    || undefined,
         notes:               formData.notes               || undefined,
         photo_url:           photoUrls[0] || undefined,
         photo_urls:          photoUrls,
-        vsa_url:             vsaUrl,
-        logbook_url:         logbookUrl,
+        documents:           validDocs,
       })
       navigate(`/clients/${selectedClientId}/vehicles/${vehicleId}`)
     } catch (error) {
@@ -407,42 +444,36 @@ const EditVehicle: React.FC = () => {
           <div className={section}>
             <div className={sectionTitle}>
               <FileText className="h-3.5 w-3.5 text-green-600" />
-              Documents
+              Documents {documents.length > 0 && `(${documents.length})`}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <DocumentUploadSlot
-                label="VSA"
-                url={vsaUrl}
-                uploading={uploadingVsa}
-                onSelect={() => vsaInputRef.current?.click()}
-                onRemove={() => setVsaUrl('')}
-              />
-              <DocumentUploadSlot
-                label="Logbook"
-                url={logbookUrl}
-                uploading={uploadingLogbook}
-                onSelect={() => logbookInputRef.current?.click()}
-                onRemove={() => setLogbookUrl('')}
-              />
+            <div className="space-y-2">
+              {documents.map(doc => (
+                <DocumentRow
+                  key={doc.id}
+                  doc={doc}
+                  uploading={!!uploadingDocs[doc.id]}
+                  onTitleChange={title => handleDocTitleChange(doc.id, title)}
+                  onUpload={() => triggerDocUpload(doc.id)}
+                  onRemove={() => handleRemoveDocumentRow(doc.id)}
+                  inpPlain={inpPlain}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={handleAddDocumentRow}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 hover:text-green-800 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Document
+              </button>
               <input
-                ref={vsaInputRef}
+                ref={docInputRef}
                 type="file"
                 accept="image/*,.pdf"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
-                  if (file) handleDocumentSelect('vsa', file)
-                  e.target.value = ''
-                }}
-              />
-              <input
-                ref={logbookInputRef}
-                type="file"
-                accept="image/*,.pdf"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) handleDocumentSelect('logbook', file)
+                  if (file && pendingDocId) handleDocumentUpload(pendingDocId, file)
                   e.target.value = ''
                 }}
               />
@@ -710,6 +741,51 @@ const EditVehicle: React.FC = () => {
                   {TANK_CAPACITIES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              <div>
+                <label className={lbl}>Tank Year of Production</label>
+                <input
+                  type="number"
+                  name="tank_year_of_production"
+                  value={formData.tank_year_of_production}
+                  onChange={handleChange}
+                  className={inpPlain}
+                  placeholder="e.g. 2020"
+                />
+              </div>
+              <div>
+                <label className={lbl}>Tank Serial Number</label>
+                <div className={iconWrap}>
+                  <Hash className={fieldIcon} />
+                  <input
+                    type="text"
+                    name="tank_serial_number"
+                    value={formData.tank_serial_number}
+                    onChange={handleChange}
+                    className={inp + ' uppercase'}
+                    placeholder="Enter tank serial number"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={lbl}>Kit Serial Number</label>
+                <div className={iconWrap}>
+                  <Hash className={fieldIcon} />
+                  <input
+                    type="text"
+                    name="kit_serial_number"
+                    value={formData.kit_serial_number}
+                    onChange={handleChange}
+                    className={inp + ' uppercase'}
+                    placeholder="Enter kit serial number"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mt-3">
               <div>
                 <label className={lbl}>Telemetry Status</label>
                 <select
@@ -779,56 +855,59 @@ const EditVehicle: React.FC = () => {
   )
 }
 
-/* ── Document upload slot used for VSA / Logbook ── */
-interface DocumentUploadSlotProps {
-  label: string
-  url: string
+/* ── Single row in the dynamic Documents list ── */
+interface DocumentRowProps {
+  doc: DocumentItem
   uploading: boolean
-  onSelect: () => void
+  onTitleChange: (title: string) => void
+  onUpload: () => void
   onRemove: () => void
+  inpPlain: string
 }
 
-const DocumentUploadSlot: React.FC<DocumentUploadSlotProps> = ({ label, url, uploading, onSelect, onRemove }) => {
-  if (url) {
-    return (
-      <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-gray-50">
-        <div className="flex items-center gap-2 min-w-0">
-          <FileText className="h-4 w-4 text-green-600 shrink-0" />
-          <span className="text-xs font-medium text-gray-700 truncate">{label}</span>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
+const DocumentRow: React.FC<DocumentRowProps> = ({ doc, uploading, onTitleChange, onUpload, onRemove, inpPlain }) => {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        value={doc.title}
+        onChange={e => onTitleChange(e.target.value)}
+        placeholder="Document title (e.g. VSA, Logbook, Insurance)"
+        className={inpPlain + ' flex-1'}
+      />
+      {doc.url ? (
+        <div className="flex items-center gap-1 shrink-0 pl-3 pr-1.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50">
+          <FileText className="h-3.5 w-3.5 text-green-600" />
           <a
-            href={url}
+            href={doc.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-1.5 text-gray-400 hover:text-green-600 rounded-lg hover:bg-white transition-colors"
-            title={`View ${label}`}
+            className="p-1 text-gray-400 hover:text-green-600 rounded-md transition-colors"
+            title="View document"
           >
             <Eye className="h-3.5 w-3.5" />
           </a>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-white transition-colors"
-            title={`Remove ${label}`}
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
         </div>
-      </div>
-    )
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      disabled={uploading}
-      className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-dashed border-gray-300 bg-gray-50 text-gray-400 hover:text-green-600 hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50"
-    >
-      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-      <span className="text-xs font-medium">{uploading ? 'Uploading…' : `Upload ${label}`}</span>
-    </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onUpload}
+          disabled={uploading}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-green-600 hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50"
+        >
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          {uploading ? 'Uploading…' : 'Upload'}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+        title="Remove document"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
   )
 }
 

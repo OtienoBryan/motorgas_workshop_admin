@@ -12,7 +12,7 @@ const Login: React.FC = () => {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [retryCount, setRetryCount] = useState(0)
-  const { login, isAuthenticated } = useAuth()
+  const { login, isAuthenticated, user } = useAuth()
   const navigate = useNavigate()
   const submitTimeoutRef = useRef<number | null>(null)
 
@@ -87,12 +87,13 @@ const Login: React.FC = () => {
     }, 30000) // 30 second timeout
 
     try {
-      await login(formData.email, formData.password)
+      const loggedInUser = await login(formData.email, formData.password)
       setSuccess('Login successful! Redirecting...')
       setRetryCount(0)
-      // Navigate to dashboard after successful login
+      // Executives land on their own overview; everyone else goes to the normal dashboard
+      const destination = loggedInUser.role?.toLowerCase() === 'executive' ? '/executive-dashboard' : '/dashboard'
       setTimeout(() => {
-        navigate('/dashboard', { replace: true })
+        navigate(destination, { replace: true })
       }, 1000)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Login failed'
@@ -129,9 +130,10 @@ const Login: React.FC = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard', { replace: true })
+      const destination = user?.role?.toLowerCase() === 'executive' ? '/executive-dashboard' : '/dashboard'
+      navigate(destination, { replace: true })
     }
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, user, navigate])
 
   // Cleanup timeout on unmount
   useEffect(() => {

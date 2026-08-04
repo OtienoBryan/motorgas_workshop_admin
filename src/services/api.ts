@@ -323,6 +323,84 @@ export interface Station {
   lpgQuantity?: number
 }
 
+export interface Shift {
+  id: number
+  date: string
+  time: string
+  userId: number | null
+  userName: string
+  station_id: number
+  station_name: string
+  status: number
+  checkInTime: string | null
+  latitude: number | null
+  longitude: number | null
+  imageUrl: string | null
+  notes: string | null
+  pump_number: number
+  checkoutLatitude: number | null
+  checkoutLongitude: number | null
+  checkoutTime: string | null
+  showUpdateLocation: number
+  routeId: number | null
+  createdAt: string
+  updatedAt: string
+  outlet_address: string
+  approvedAt: string
+}
+
+export interface StaffLeave {
+  id: number
+  staff_id: number
+  leave_type_id: number
+  start_date: string
+  end_date: string
+  reason: string | null
+  attachment_url: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  is_half_day: number
+  approved_by: number | null
+  applied_at: string
+  updated_at: string
+}
+
+export interface SalesPosting {
+  id: number
+  station_id: number
+  period_start: string
+  period_end: string
+  cash_posted: number | string
+  card_posted: number | string
+  mpesa_posted: number | string
+  credit_posted: number | string
+  other_posted: number | string
+  cash_system: number | string
+  card_system: number | string
+  mpesa_system: number | string
+  credit_system: number | string
+  other_system: number | string
+  notes: string | null
+  posted_by: number | null
+  created_at: string
+}
+
+export interface CreateSalesPostingPayload {
+  station_id: number
+  period_start: string
+  period_end: string
+  cash_posted: number
+  card_posted: number
+  mpesa_posted: number
+  credit_posted: number
+  other_posted: number
+  cash_system: number
+  card_system: number
+  mpesa_system: number
+  credit_system: number
+  other_system: number
+  notes?: string
+}
+
 export interface KeyAccount {
   id: number
   name: string
@@ -341,6 +419,9 @@ export interface KeyAccount {
 export interface ConversionClient {
   id: number
   name: string
+  first_name?: string | null
+  middle_name?: string | null
+  surname?: string | null
   email: string | null
   contact: string
   address: string | null
@@ -408,12 +489,16 @@ export interface ConversionVehicle {
   color?: string
   unit_number?: string
   tank_capacity?: string
+  tank_year_of_production?: number
+  tank_serial_number?: string
+  kit_serial_number?: string
   telemetry_status?: string
   notes?: string
   photo_url?: string
   photo_urls?: string[]
   vsa_url?: string
   logbook_url?: string
+  documents?: { title: string; url: string }[]
   labels?: string[]
   created_at: string
   updated_at: string
@@ -708,6 +793,7 @@ export interface Sale {
   saleDate: string
   referenceNumber?: string
   notes?: string
+  imagePath?: string
   createdBy?: number
   createdAt: string
   updatedAt: string
@@ -2252,6 +2338,86 @@ class AdminApiService {
     }
     return this.request<void>(`/stations/${id}`, {
       method: 'DELETE'
+    })
+  }
+
+  // Shifts / Attendance
+  async getShifts(stationId?: number, startDate?: string, endDate?: string): Promise<Shift[]> {
+    console.log('🕒 [API] getShifts called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return []
+    }
+    const params = new URLSearchParams()
+    if (stationId) params.append('stationId', String(stationId))
+    if (startDate) params.append('startDate', startDate)
+    if (endDate) params.append('endDate', endDate)
+    const query = params.toString()
+    const url = query ? `/shifts?${query}` : '/shifts'
+    try {
+      return await this.request<Shift[]>(url)
+    } catch (error) {
+      console.error('🕒 [API] getShifts failed:', error)
+      return []
+    }
+  }
+
+  async getStaffLeaves(staffId?: number, startDate?: string, endDate?: string): Promise<StaffLeave[]> {
+    console.log('🌴 [API] getStaffLeaves called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return []
+    }
+    const params = new URLSearchParams()
+    if (staffId) params.append('staffId', String(staffId))
+    if (startDate) params.append('startDate', startDate)
+    if (endDate) params.append('endDate', endDate)
+    const query = params.toString()
+    const url = query ? `/staff-leaves?${query}` : '/staff-leaves'
+    try {
+      return await this.request<StaffLeave[]>(url)
+    } catch (error) {
+      console.error('🌴 [API] getStaffLeaves failed:', error)
+      return []
+    }
+  }
+
+  async getSalesPostings(stationId?: number): Promise<SalesPosting[]> {
+    console.log('📝 [API] getSalesPostings called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return []
+    }
+    const query = stationId ? `?stationId=${stationId}` : ''
+    try {
+      return await this.request<SalesPosting[]>(`/sales-postings${query}`)
+    } catch (error) {
+      console.error('📝 [API] getSalesPostings failed:', error)
+      return []
+    }
+  }
+
+  async createSalesPosting(payload: CreateSalesPostingPayload): Promise<SalesPosting> {
+    console.log('📝 [API] createSalesPosting called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return { id: Date.now(), ...payload, notes: payload.notes || null, posted_by: null, created_at: new Date().toISOString() }
+    }
+    return this.request<SalesPosting>('/sales-postings', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+  }
+
+  async updateSalesPosting(id: number, payload: CreateSalesPostingPayload): Promise<SalesPosting> {
+    console.log('📝 [API] updateSalesPosting called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return { id, ...payload, notes: payload.notes || null, posted_by: null, created_at: new Date().toISOString() }
+    }
+    return this.request<SalesPosting>(`/sales-postings/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
     })
   }
 

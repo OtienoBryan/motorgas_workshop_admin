@@ -19,6 +19,9 @@ import {
 export interface Client {
   id: number
   name: string
+  firstName?: string
+  middleName?: string
+  surname?: string
   email?: string
   contact: string
   address?: string
@@ -77,7 +80,9 @@ export const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void
 )
 
 export const mapConversionClient = (c: ConversionClient): Client => ({
-  id: c.id, name: c.name, email: c.email || undefined,
+  id: c.id, name: c.name,
+  firstName: c.first_name || undefined, middleName: c.middle_name || undefined, surname: c.surname || undefined,
+  email: c.email || undefined,
   contact: c.contact, address: c.address || undefined, notes: c.description || undefined,
   region: c.region || '', category: (c.category as 'individual' | 'company') || 'individual',
   organizationType: c.organization_type || undefined, organizationName: c.organization_name || undefined,
@@ -90,7 +95,11 @@ export const mapConversionClient = (c: ConversionClient): Client => ({
 })
 
 export const buildClientPayload = (clientData: Partial<Client>) => ({
-  name: clientData.name || '', email: clientData.email || undefined,
+  name: clientData.name || '',
+  first_name: clientData.category === 'individual' ? (clientData.firstName || undefined) : undefined,
+  middle_name: clientData.category === 'individual' ? (clientData.middleName || undefined) : undefined,
+  surname: clientData.category === 'individual' ? (clientData.surname || undefined) : undefined,
+  email: clientData.email || undefined,
   contact: clientData.contact || '', category: clientData.category || 'individual',
   organization_type: clientData.organizationType || undefined,
   organization_name: clientData.organizationType ? (clientData.organizationName || undefined) : undefined,

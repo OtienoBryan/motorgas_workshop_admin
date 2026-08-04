@@ -19,7 +19,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth()
   const location = useLocation()
   
-  const isDashboard = location.pathname === '/dashboard'
+  const isExecutive = user?.role?.toLowerCase() === 'executive'
+  const homeRoute = isExecutive ? '/executive-dashboard' : '/dashboard'
+  const isDashboard = location.pathname === homeRoute
 
   // Track inactivity - show screensaver after 20 minutes
   useInactivity({
@@ -51,7 +53,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex flex-1 items-center gap-4">
               <h1 className="text-xl font-bold text-green-800">MotorGas Africa</h1>
               <Link
-                to="/dashboard"
+                to={homeRoute}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   isDashboard
                     ? 'bg-green-600 text-white'

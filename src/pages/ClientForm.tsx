@@ -24,13 +24,23 @@ import {
 import { Client, REFERRAL_SOURCES, Toggle, mapConversionClient, buildClientPayload } from './Clients'
 
 const emptyForm: Partial<Client> = {
-  name: '', email: '', contact: '', address: '', notes: '', region: '', category: 'individual', taxPin: '',
+  name: '', firstName: '', middleName: '', surname: '', email: '', contact: '', address: '', notes: '', region: '', category: 'individual', taxPin: '',
   organizationType: undefined, organizationName: '',
   referralSource: '', referralNotes: '',
   taxExempt: false, applyDiscount: false, discountRate: '',
   labourRateOverride: false, labourRate: '',
   partsMarkupOverride: false, partsMarkup: '',
   paymentTermsOverride: false, paymentTerms: '',
+}
+
+// Best-effort split for legacy clients that only have a combined `name` and no stored name parts.
+const splitLegacyName = (fullName: string) => {
+  const tokens = fullName.trim().split(/\s+/).filter(Boolean)
+  return {
+    first: tokens[0] || '',
+    middle: tokens.length > 2 ? tokens.slice(1, -1).join(' ') : '',
+    last: tokens.length > 1 ? tokens[tokens.length - 1] : '',
+  }
 }
 
 const ORG_NAME_LABELS: Record<'individual' | 'sacco' | 'company', string> = {
@@ -63,8 +73,15 @@ const ClientForm: React.FC = () => {
       if (cancelled) return
       if (raw) {
         const client = mapConversionClient(raw)
+        const legacy = client.category === 'individual' && !client.firstName && !client.surname
+          ? splitLegacyName(client.name)
+          : null
         setFormData({
-          name: client.name, email: client.email || '', contact: client.contact,
+          name: client.name,
+          firstName: client.firstName || legacy?.first || '',
+          middleName: client.middleName || legacy?.middle || '',
+          surname: client.surname || legacy?.last || '',
+          email: client.email || '', contact: client.contact,
           address: client.address || '', notes: client.notes || '', region: client.region,
           category: client.category, taxPin: client.taxPin || '',
           organizationType: client.organizationType, organizationName: client.organizationName || '',
@@ -85,7 +102,10 @@ const ClientForm: React.FC = () => {
     e.preventDefault()
     try {
       setSaving(true)
-      const payload = buildClientPayload(formData)
+      const composedName = formData.category === 'company'
+        ? (formData.name || '').trim()
+        : [formData.firstName, formData.middleName, formData.surname].filter(Boolean).join(' ').trim()
+      const payload = buildClientPayload({ ...formData, name: composedName })
       if (isEditing) {
         await adminApiService.updateConversionClient(Number(clientId), payload)
       } else {
@@ -207,15 +227,47 @@ const ClientForm: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className={lbl}>{isCompany ? 'Company Name' : 'Full Name'} *</label>
-                  <div className={iconWrap}>
-                    {isCompany ? <Building2 className={fieldIcon} /> : <UserCheck className={fieldIcon} />}
-                    <input type="text" name="name" value={formData.name || ''} required
-                      onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                      className={inp} placeholder={isCompany ? 'Enter company name' : 'Enter full name'} />
+                {isCompany ? (
+                  <div className="col-span-2">
+                    <label className={lbl}>Company Name *</label>
+                    <div className={iconWrap}>
+                      <Building2 className={fieldIcon} />
+                      <input type="text" name="name" value={formData.name || ''} required
+                        onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
+                        className={inp} placeholder="Enter company name" />
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="col-span-2 grid grid-cols-3 gap-3">
+                    <div>
+                      <label className={lbl}>First Name *</label>
+                      <div className={iconWrap}>
+                        <UserCheck className={fieldIcon} />
+                        <input type="text" value={formData.firstName || ''} required
+                          onChange={e => setFormData(p => ({ ...p, firstName: e.target.value }))}
+                          className={inp} placeholder="First name" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={lbl}>Middle Name <span className="text-gray-400 font-normal">(optional)</span></label>
+                      <div className={iconWrap}>
+                        <UserCheck className={fieldIcon} />
+                        <input type="text" value={formData.middleName || ''}
+                          onChange={e => setFormData(p => ({ ...p, middleName: e.target.value }))}
+                          className={inp} placeholder="Middle name" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={lbl}>Surname *</label>
+                      <div className={iconWrap}>
+                        <UserCheck className={fieldIcon} />
+                        <input type="text" value={formData.surname || ''} required
+                          onChange={e => setFormData(p => ({ ...p, surname: e.target.value }))}
+                          className={inp} placeholder="Surname" />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className={lbl}>Contact *</label>

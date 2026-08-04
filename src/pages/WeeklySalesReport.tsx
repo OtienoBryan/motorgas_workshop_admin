@@ -234,7 +234,7 @@ const WeeklySalesReport: React.FC = () => {
       await exportElementToPdf(wrapper, `weekly-sales-report-${startDate}-to-${endDate}.pdf`, {
         orientation: 'l',
         header: {
-          title: 'Weekly Sales Report',
+          title: 'Performance Report',
           subtitle: subtitleParts.join(' • '),
           logoUrl: '/motor.jpeg',
         },
@@ -292,7 +292,7 @@ const WeeklySalesReport: React.FC = () => {
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <h1 className="text-xs font-bold text-gray-900">Weekly Sales Report</h1>
+          <h1 className="text-xs font-bold text-gray-900">Performance Report</h1>
         </div>
 
         {/* Filters */}

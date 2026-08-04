@@ -41,17 +41,27 @@ interface VehicleFormData {
   odo_unit: 'KM' | 'Miles'
   color: string
   tank_capacity: string
+  tank_year_of_production: string
+  tank_serial_number: string
+  kit_serial_number: string
   telemetry_status: string
   notes: string
   photo_urls: string[]
-  vsa_url: string
-  logbook_url: string
+  documents: DocumentItem[]
+}
+
+interface DocumentItem {
+  id: string
+  title: string
+  url: string
 }
 
 const TANK_CAPACITIES = ['37L Internal', '42L Internal', '42L External', '92L']
 const TELEMETRY_STATUSES = ['Manual Tracking', 'OBD2 + TM', 'TM']
 
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024 // 10 MB — Cloudinary preset limit
+
+const genId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2))
 
 const emptyVehicleForm: VehicleFormData = {
   vin_serial_number: '',
@@ -70,11 +80,13 @@ const emptyVehicleForm: VehicleFormData = {
   odo_unit: 'KM',
   color: '',
   tank_capacity: '',
+  tank_year_of_production: '',
+  tank_serial_number: '',
+  kit_serial_number: '',
   telemetry_status: '',
   notes: '',
   photo_urls: [],
-  vsa_url: '',
-  logbook_url: ''
+  documents: []
 }
 
 const AddVehicle: React.FC = () => {
@@ -87,15 +99,14 @@ const AddVehicle: React.FC = () => {
   const [formData, setFormData] = useState<VehicleFormData>(emptyVehicleForm)
   const [saving, setSaving] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const [uploadingVsa, setUploadingVsa] = useState(false)
-  const [uploadingLogbook, setUploadingLogbook] = useState(false)
+  const [uploadingDocs, setUploadingDocs] = useState<Record<string, boolean>>({})
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null)
   const [analyzingImage, setAnalyzingImage] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const [notesExpanded, setNotesExpanded] = useState(true)
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const vsaInputRef = useRef<HTMLInputElement>(null)
-  const logbookInputRef = useRef<HTMLInputElement>(null)
+  const docInputRef = useRef<HTMLInputElement>(null)
 
   const effectiveClientId = clientId || selectedClientId
 
@@ -161,28 +172,38 @@ const AddVehicle: React.FC = () => {
     setFormData(prev => ({ ...prev, photo_urls: prev.photo_urls.filter(u => u !== url) }))
   }
 
-  const handleDocumentSelect = async (kind: 'vsa' | 'logbook', file: File) => {
-    const label = kind === 'vsa' ? 'VSA' : 'logbook'
-    if (file.size > MAX_DOCUMENT_SIZE) {
-      alert(`${label} file is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed is 10 MB.`)
-      return
-    }
-    const setUploading = kind === 'vsa' ? setUploadingVsa : setUploadingLogbook
-    const field = kind === 'vsa' ? 'vsa_url' : 'logbook_url'
-    setUploading(true)
-    try {
-      const result = await cloudinaryService.uploadDocument(file, { folder: `vehicle-${kind}` })
-      setFormData(prev => ({ ...prev, [field]: result.secure_url }))
-    } catch (error) {
-      console.error(`${kind.toUpperCase()} upload failed:`, error)
-      alert(`Failed to upload ${label}: ${(error as any).message || 'Unknown error'}`)
-    } finally {
-      setUploading(false)
-    }
+  const handleAddDocumentRow = () => {
+    setFormData(prev => ({ ...prev, documents: [...prev.documents, { id: genId(), title: '', url: '' }] }))
   }
 
-  const handleRemoveDocument = (kind: 'vsa' | 'logbook') => {
-    setFormData(prev => ({ ...prev, [kind === 'vsa' ? 'vsa_url' : 'logbook_url']: '' }))
+  const handleDocTitleChange = (id: string, title: string) => {
+    setFormData(prev => ({ ...prev, documents: prev.documents.map(d => d.id === id ? { ...d, title } : d) }))
+  }
+
+  const handleRemoveDocumentRow = (id: string) => {
+    setFormData(prev => ({ ...prev, documents: prev.documents.filter(d => d.id !== id) }))
+  }
+
+  const triggerDocUpload = (id: string) => {
+    setPendingDocId(id)
+    docInputRef.current?.click()
+  }
+
+  const handleDocumentUpload = async (id: string, file: File) => {
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      alert(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed is 10 MB.`)
+      return
+    }
+    setUploadingDocs(prev => ({ ...prev, [id]: true }))
+    try {
+      const result = await cloudinaryService.uploadDocument(file, { folder: 'vehicle-documents' })
+      setFormData(prev => ({ ...prev, documents: prev.documents.map(d => d.id === id ? { ...d, url: result.secure_url } : d) }))
+    } catch (error) {
+      console.error('Document upload failed:', error)
+      alert(`Failed to upload document: ${(error as any).message || 'Unknown error'}`)
+    } finally {
+      setUploadingDocs(prev => ({ ...prev, [id]: false }))
+    }
   }
 
   const handleAnalyzeImage = async () => {
@@ -238,6 +259,9 @@ const AddVehicle: React.FC = () => {
     try {
       setSaving(true)
       setSuccessMessage('')
+      const validDocs = formData.documents
+        .filter(d => d.url)
+        .map(({ title, url }) => ({ title: title.trim() || 'Document', url }))
       await adminApiService.createConversionVehicle({
         conversion_client_id: Number(effectiveClientId),
         registration_number: formData.registration_number,
@@ -256,12 +280,14 @@ const AddVehicle: React.FC = () => {
         odo_unit: formData.odo_unit,
         color: formData.color || undefined,
         tank_capacity: formData.tank_capacity || undefined,
+        tank_year_of_production: formData.tank_year_of_production ? Number(formData.tank_year_of_production) : undefined,
+        tank_serial_number: formData.tank_serial_number || undefined,
+        kit_serial_number: formData.kit_serial_number || undefined,
         telemetry_status: formData.telemetry_status || undefined,
         notes: formData.notes || undefined,
         photo_url: formData.photo_urls[0] || undefined,
         photo_urls: formData.photo_urls.length ? formData.photo_urls : undefined,
-        vsa_url: formData.vsa_url || undefined,
-        logbook_url: formData.logbook_url || undefined
+        documents: validDocs.length ? validDocs : undefined
       })
       setFormData(emptyVehicleForm)
       setSuccessMessage('Vehicle added successfully. You can add another one below.')
@@ -421,42 +447,36 @@ const AddVehicle: React.FC = () => {
           <div className={section}>
             <div className={sectionTitle}>
               <FileText className="h-3.5 w-3.5 text-green-600" />
-              Documents
+              Documents {formData.documents.length > 0 && `(${formData.documents.length})`}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <DocumentUploadSlot
-                label="VSA"
-                url={formData.vsa_url}
-                uploading={uploadingVsa}
-                onSelect={() => vsaInputRef.current?.click()}
-                onRemove={() => handleRemoveDocument('vsa')}
-              />
-              <DocumentUploadSlot
-                label="Logbook"
-                url={formData.logbook_url}
-                uploading={uploadingLogbook}
-                onSelect={() => logbookInputRef.current?.click()}
-                onRemove={() => handleRemoveDocument('logbook')}
-              />
+            <div className="space-y-2">
+              {formData.documents.map(doc => (
+                <DocumentRow
+                  key={doc.id}
+                  doc={doc}
+                  uploading={!!uploadingDocs[doc.id]}
+                  onTitleChange={title => handleDocTitleChange(doc.id, title)}
+                  onUpload={() => triggerDocUpload(doc.id)}
+                  onRemove={() => handleRemoveDocumentRow(doc.id)}
+                  inpPlain={inpPlain}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={handleAddDocumentRow}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 hover:text-green-800 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Document
+              </button>
               <input
-                ref={vsaInputRef}
+                ref={docInputRef}
                 type="file"
                 accept="image/*,.pdf"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
-                  if (file) handleDocumentSelect('vsa', file)
-                  e.target.value = ''
-                }}
-              />
-              <input
-                ref={logbookInputRef}
-                type="file"
-                accept="image/*,.pdf"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) handleDocumentSelect('logbook', file)
+                  if (file && pendingDocId) handleDocumentUpload(pendingDocId, file)
                   e.target.value = ''
                 }}
               />
@@ -706,6 +726,54 @@ const AddVehicle: React.FC = () => {
                   {TANK_CAPACITIES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              <div>
+                <label className={lbl}>Tank Year of Production</label>
+                <select
+                  name="tank_year_of_production"
+                  value={formData.tank_year_of_production}
+                  onChange={handleChange}
+                  className={inpPlain}
+                >
+                  <option value="">Select year</option>
+                  {years.map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={lbl}>Tank Serial Number</label>
+                <div className={iconWrap}>
+                  <Hash className={fieldIcon} />
+                  <input
+                    type="text"
+                    name="tank_serial_number"
+                    value={formData.tank_serial_number}
+                    onChange={handleChange}
+                    className={inp + ' uppercase'}
+                    placeholder="Enter tank serial number"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={lbl}>Kit Serial Number</label>
+                <div className={iconWrap}>
+                  <Hash className={fieldIcon} />
+                  <input
+                    type="text"
+                    name="kit_serial_number"
+                    value={formData.kit_serial_number}
+                    onChange={handleChange}
+                    className={inp + ' uppercase'}
+                    placeholder="Enter kit serial number"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mt-3">
               <div>
                 <label className={lbl}>Telemetry Status</label>
                 <select
@@ -775,56 +843,59 @@ const AddVehicle: React.FC = () => {
   )
 }
 
-/* ── Document upload slot used for VSA / Logbook ── */
-interface DocumentUploadSlotProps {
-  label: string
-  url: string
+/* ── Single row in the dynamic Documents list ── */
+interface DocumentRowProps {
+  doc: DocumentItem
   uploading: boolean
-  onSelect: () => void
+  onTitleChange: (title: string) => void
+  onUpload: () => void
   onRemove: () => void
+  inpPlain: string
 }
 
-const DocumentUploadSlot: React.FC<DocumentUploadSlotProps> = ({ label, url, uploading, onSelect, onRemove }) => {
-  if (url) {
-    return (
-      <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-gray-50">
-        <div className="flex items-center gap-2 min-w-0">
-          <FileText className="h-4 w-4 text-green-600 shrink-0" />
-          <span className="text-xs font-medium text-gray-700 truncate">{label}</span>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
+const DocumentRow: React.FC<DocumentRowProps> = ({ doc, uploading, onTitleChange, onUpload, onRemove, inpPlain }) => {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        value={doc.title}
+        onChange={e => onTitleChange(e.target.value)}
+        placeholder="Document title (e.g. VSA, Logbook, Insurance)"
+        className={inpPlain + ' flex-1'}
+      />
+      {doc.url ? (
+        <div className="flex items-center gap-1 shrink-0 pl-3 pr-1.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50">
+          <FileText className="h-3.5 w-3.5 text-green-600" />
           <a
-            href={url}
+            href={doc.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-1.5 text-gray-400 hover:text-green-600 rounded-lg hover:bg-white transition-colors"
-            title={`View ${label}`}
+            className="p-1 text-gray-400 hover:text-green-600 rounded-md transition-colors"
+            title="View document"
           >
             <Eye className="h-3.5 w-3.5" />
           </a>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-white transition-colors"
-            title={`Remove ${label}`}
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
         </div>
-      </div>
-    )
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      disabled={uploading}
-      className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-dashed border-gray-300 bg-gray-50 text-gray-400 hover:text-green-600 hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50"
-    >
-      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-      <span className="text-xs font-medium">{uploading ? 'Uploading…' : `Upload ${label}`}</span>
-    </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onUpload}
+          disabled={uploading}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-green-600 hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50"
+        >
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          {uploading ? 'Uploading…' : 'Upload'}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+        title="Remove document"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
   )
 }
 

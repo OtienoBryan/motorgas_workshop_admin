@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import ExecutiveDashboard from './pages/ExecutiveDashboard'
 import Chat from './pages/Chat'
 import Notices from './pages/Notices'
 import StaffPage from './pages/Staff'
@@ -36,6 +37,9 @@ import InventoryReport from './pages/InventoryReport'
 import PostSale from './pages/PostSale'
 import KeyAccountLedgerReport from './pages/KeyAccountLedgerReport'
 import SalesReport from './pages/SalesReport'
+import SalesSummaryReport from './pages/SalesSummaryReport'
+import StationSalesDetail from './pages/StationSalesDetail'
+import StationVarianceReport from './pages/StationVarianceReport'
 import WeeklySalesReport from './pages/WeeklySalesReport'
 import VehicleFuelReport from './pages/VehicleFuelReport'
 import Conversion from './pages/Conversion'
@@ -46,6 +50,8 @@ import Invoices from './pages/Invoices'
 import Quotations from './pages/Quotations'
 import Accounts from './pages/Accounts'
 import Calendar from './pages/Calendar'
+import Attendance from './pages/Attendance'
+import WorkingDays from './pages/WorkingDays'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -63,8 +69,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
-  const { isAuthenticated, loading } = useAuth()
-  
+  const { isAuthenticated, loading, user } = useAuth()
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -73,11 +79,13 @@ function AppContent() {
     )
   }
 
+  const homeRoute = user?.role?.toLowerCase() === 'executive' ? '/executive-dashboard' : '/dashboard'
+
   return (
     <Routes>
-      <Route 
-        path="/login" 
-        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} 
+      <Route
+        path="/login"
+        element={isAuthenticated ? <Navigate to={homeRoute} replace /> : <Login />}
       />
       <Route
         path="/*"
@@ -85,8 +93,9 @@ function AppContent() {
           <ProtectedRoute>
             <Layout>
               <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<Navigate to={homeRoute} replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/executive-dashboard" element={<ExecutiveDashboard />} />
                 <Route path="/categories" element={<Categories />} />
                 <Route path="/regions" element={<Regions />} />
                 <Route path="/stations" element={<Stations />} />
@@ -101,10 +110,15 @@ function AppContent() {
                 <Route path="/inventory/report" element={<InventoryReport />} />
                 <Route path="/sales/post" element={<PostSale />} />
                 <Route path="/sales/report" element={<SalesReport />} />
+                <Route path="/sales/report/summary" element={<SalesSummaryReport />} />
+                <Route path="/sales/report/summary/:stationId" element={<StationSalesDetail />} />
+                <Route path="/sales/report/summary/:stationId/variance-report" element={<StationVarianceReport />} />
                 <Route path="/sales/report/weekly" element={<WeeklySalesReport />} />
                 <Route path="/sales/report/fuel" element={<VehicleFuelReport />} />
                 <Route path="/conversion" element={<Conversion />} />
                 <Route path="/calendar" element={<Calendar />} />
+                <Route path="/attendance" element={<Attendance />} />
+                <Route path="/working-days" element={<WorkingDays />} />
                 <Route path="/key-accounts/ledger" element={<KeyAccountLedgerReport />} />
                <Route path="/staff" element={<StaffPage />} />
                 <Route path="/employees" element={<Employees />} />

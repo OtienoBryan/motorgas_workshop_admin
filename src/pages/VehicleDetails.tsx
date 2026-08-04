@@ -25,7 +25,6 @@ import {
   UserCog,
   Receipt,
   Printer,
-  Fuel,
   SatelliteDish,
   User,
   Phone,
@@ -33,6 +32,7 @@ import {
   MapPin,
   CreditCard,
   FileText,
+  Eye,
   Plus,
   Copy,
   Check,
@@ -67,12 +67,16 @@ export interface Vehicle {
   color?: string
   unit_number?: string
   tank_capacity?: string
+  tank_year_of_production?: number
+  tank_serial_number?: string
+  kit_serial_number?: string
   telemetry_status?: string
   notes?: string
   photo_url?: string
   photo_urls?: string[]
   vsa_url?: string
   logbook_url?: string
+  documents?: { title: string; url: string }[]
   labels?: string[]
   created_at: string
   updated_at: string
@@ -258,6 +262,15 @@ const VehicleDetails: React.FC = () => {
   const title = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ')
   const photos = vehicle.photo_urls?.length ? vehicle.photo_urls : (vehicle.photo_url ? [vehicle.photo_url] : [])
   const labels = vehicle.labels || []
+  const validDocuments = (vehicle.documents || []).filter(
+    (d): d is { title: string; url: string } => !!d && typeof d.title === 'string' && typeof d.url === 'string' && !!d.url
+  )
+  const documents = validDocuments.length
+    ? validDocuments
+    : ([
+        vehicle.vsa_url ? { title: 'VSA', url: vehicle.vsa_url } : null,
+        vehicle.logbook_url ? { title: 'Logbook', url: vehicle.logbook_url } : null,
+      ].filter(Boolean) as { title: string; url: string }[])
 
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'owner',       label: 'Owner',       icon: <User className="h-3.5 w-3.5" /> },
@@ -334,10 +347,13 @@ const VehicleDetails: React.FC = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <DocumentBadge label="VSA" url={vehicle.vsa_url} />
-            <DocumentBadge label="Logbook" url={vehicle.logbook_url} />
-          </div>
+          {documents.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {documents.map((doc, i) => (
+                <DocumentBadge key={`${doc.title}-${i}`} label={doc.title} url={doc.url} />
+              ))}
+            </div>
+          )}
 
           <h2 className="text-lg font-bold text-gray-900 leading-tight mb-2">{title || 'Vehicle'}</h2>
 
@@ -400,8 +416,19 @@ const VehicleDetails: React.FC = () => {
             <SidebarRow icon={<Activity className="h-3.5 w-3.5" />} value={vehicle.unit_number} />
             <SidebarRow icon={<Gauge className="h-3.5 w-3.5" />}
               value={vehicle.current_odo ? `${vehicle.current_odo.toLocaleString()} ${vehicle.odo_unit}` : undefined} />
-            <SidebarRow icon={<Fuel className="h-3.5 w-3.5" />} value={vehicle.tank_capacity} />
             <SidebarRow icon={<SatelliteDish className="h-3.5 w-3.5" />} value={vehicle.telemetry_status} />
+          </div>
+
+          <div className="-mx-1 border-t border-gray-100 pt-2 mt-1">
+            <p className="px-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Tank &amp; Kit</p>
+            <LabeledRow label="Tank Capacity" value={vehicle.tank_capacity} alwaysShow />
+            <LabeledRow label="Tank Year" value={vehicle.tank_year_of_production ? String(vehicle.tank_year_of_production) : undefined} alwaysShow />
+            <LabeledRow label="Tank Serial No." value={vehicle.tank_serial_number} mono alwaysShow
+              onCopy={() => vehicle.tank_serial_number && handleCopy(vehicle.tank_serial_number, 'tankSerial')}
+              copied={copiedField === 'tankSerial'} />
+            <LabeledRow label="Kit Serial No." value={vehicle.kit_serial_number} mono alwaysShow
+              onCopy={() => vehicle.kit_serial_number && handleCopy(vehicle.kit_serial_number, 'kitSerial')}
+              copied={copiedField === 'kitSerial'} />
           </div>
         </div>
 
@@ -455,6 +482,39 @@ const VehicleDetails: React.FC = () => {
                 ) : (
                   <EmptyTab icon={<User className="h-5 w-5 text-gray-300" />} title="No owner on record" subtitle="This vehicle has no linked client" />
                 )}
+
+                {/* Documents */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-bold text-gray-900">Documents {documents.length > 0 && `(${documents.length})`}</h2>
+                    <button
+                      onClick={() => navigate(`/clients/${clientId}/vehicles/${vehicleId}/edit`)}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                  {documents.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {documents.map((doc, i) => (
+                        <a
+                          key={`${doc.title}-${i}`}
+                          href={doc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-100 hover:border-green-200 hover:bg-green-50 transition-colors max-w-[160px]"
+                          title={doc.title}
+                        >
+                          <FileText className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                          <span className="text-xs font-medium text-gray-700 truncate">{doc.title}</span>
+                          <Eye className="h-3 w-3 text-gray-300 shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">No documents uploaded for this vehicle.</p>
+                  )}
+                </div>
 
                 {/* Notes (moved here from the removed Notes tab) */}
                 <div>
@@ -850,6 +910,35 @@ const SidebarRow: React.FC<SidebarRowProps> = ({ icon, value, mono, colorDot, on
           {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
         </button>
       )}
+    </div>
+  )
+}
+
+/* ── Sidebar spec row with an explicit text label (for fields that would otherwise share an icon and be ambiguous) ── */
+interface LabeledRowProps {
+  label: string
+  value?: string | null
+  mono?: boolean
+  onCopy?: () => void
+  copied?: boolean
+  alwaysShow?: boolean
+}
+
+const LabeledRow: React.FC<LabeledRowProps> = ({ label, value, mono, onCopy, copied, alwaysShow }) => {
+  if (!value && !alwaysShow) return null
+  return (
+    <div className="flex items-center justify-between gap-2 px-1 py-1">
+      <span className="text-[11px] text-gray-400 shrink-0">{label}</span>
+      <div className="flex items-center gap-1 min-w-0">
+        <span className={`text-xs truncate ${value ? 'font-medium text-gray-700' : 'text-gray-300 italic'} ${mono && value ? 'font-mono' : ''}`}>
+          {value || 'Not set'}
+        </span>
+        {onCopy && value && (
+          <button onClick={onCopy} className="p-0.5 text-gray-300 hover:text-gray-600 shrink-0" title="Copy">
+            {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+          </button>
+        )}
+      </div>
     </div>
   )
 }

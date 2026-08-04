@@ -12,7 +12,7 @@ interface User {
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<User>
   logout: () => void
   loading: boolean
 }
@@ -67,7 +67,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('🔐 [AuthContext] Starting login process for:', email)
       const response = await adminApiService.login(email, password)
       console.log('✅ [AuthContext] Login successful, setting user:', response.user)
-      setUser(response.user)
+      const loggedInUser = response.user as unknown as User
+      setUser(loggedInUser)
+      return loggedInUser
     } catch (error) {
       console.error('❌ [AuthContext] Login failed:', error)
       // Re-throw the error to be handled by the Login component

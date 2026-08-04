@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { adminApiService, Sale, Station, KeyAccount, ConversionClient, Vehicle, Staff } from '../services/api'
 import {
@@ -7,9 +7,15 @@ import {
   Download,
   DollarSign,
   Fuel,
+  Image as ImageIcon,
   Receipt,
   TrendingUp,
-  Truck
+  Truck,
+  SlidersHorizontal,
+  Calendar,
+  MapPin,
+  Users,
+  X
 } from 'lucide-react'
 
 const SalesReport: React.FC = () => {
@@ -26,6 +32,7 @@ const SalesReport: React.FC = () => {
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [expandedImage, setExpandedImage] = useState<string | null>(null)
   const [selectedStationId, setSelectedStationId] = useState<number | null>(
     stationIdParam ? Number(stationIdParam) : null
   )
@@ -41,6 +48,34 @@ const SalesReport: React.FC = () => {
   const selectedConversionClientId = selectedClientFilter.startsWith('cc-')
     ? Number(selectedClientFilter.slice(3))
     : null
+
+  const [datePreset, setDatePreset] = useState<'this_month' | 'last_month' | 'last_30' | 'last_90' | 'all' | 'custom'>('this_month')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+
+  const dateRange = useMemo(() => {
+    if (datePreset === 'all') return null
+    const now = new Date()
+    let start: Date
+    let end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+
+    if (datePreset === 'this_month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1)
+    } else if (datePreset === 'last_month') {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+    } else if (datePreset === 'last_30') {
+      start = new Date(now)
+      start.setDate(start.getDate() - 29)
+    } else if (datePreset === 'last_90') {
+      start = new Date(now)
+      start.setDate(start.getDate() - 89)
+    } else {
+      start = customStart ? new Date(`${customStart}T00:00:00`) : new Date(now.getFullYear(), now.getMonth(), 1)
+      end = customEnd ? new Date(`${customEnd}T23:59:59.999`) : end
+    }
+    return { start, end }
+  }, [datePreset, customStart, customEnd])
 
   useEffect(() => {
     fetchSales()
@@ -299,22 +334,38 @@ const SalesReport: React.FC = () => {
   }
 
   const filteredSales = sales.filter(sale => {
-    const matchesSearch = 
+    const matchesSearch =
       getStationName(sale.stationId).toLowerCase().includes(searchTerm.toLowerCase()) ||
       getOwnerName(sale).toLowerCase().includes(searchTerm.toLowerCase()) ||
       getVehicleName(sale).toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.referenceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.clientType.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    return matchesSearch
+
+    const matchesDateRange = !dateRange || (() => {
+      const d = new Date(sale.saleDate)
+      return d >= dateRange.start && d <= dateRange.end
+    })()
+
+    return matchesSearch && matchesDateRange
   })
+
+  const hasActiveFilters = datePreset !== 'this_month' || selectedStationId !== null || selectedClientFilter !== '' || searchTerm !== ''
+
+  const clearFilters = () => {
+    setDatePreset('this_month')
+    setCustomStart('')
+    setCustomEnd('')
+    setSelectedStationId(null)
+    setSelectedClientFilter('')
+    setSearchTerm('')
+  }
 
   // Calculate summary statistics
   const totalSales = filteredSales.length
   const totalQuantity = filteredSales.reduce((sum, s) => sum + Number(s.quantity), 0)
   const totalRevenue = filteredSales.reduce((sum, s) => sum + Number(s.totalAmount), 0)
-  const averagePrice = totalQuantity > 0 ? totalRevenue / totalQuantity : 0
+  const avv = totalSales > 0 ? totalQuantity / totalSales : 0
   // vehicleId and conversionVehicleId are independent id spaces, so a plain
   // numeric Set would collide a regular vehicle #8 with a conversion vehicle #8
   const uniqueVehicleCount = new Set(
@@ -341,19 +392,26 @@ const SalesReport: React.FC = () => {
         {/* Header */}
         <div className="mb-2 flex items-center gap-2">
           <button
-            onClick={() => navigate('/sales/post')}
+            onClick={() => navigate('/accounts')}
             className="p-1 text-gray-600 hover:text-gray-800"
-            title="Back to Post Sale"
+            title="Back to Accounts"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <h1 className="text-sm font-bold text-gray-900">Sales Report</h1>
           <button
+            onClick={() => navigate('/sales/report/summary')}
+            className="ml-auto flex items-center gap-1 px-2 py-1 text-[11px] bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          >
+            <Receipt className="h-3 w-3" />
+            Sales Summary
+          </button>
+          <button
             onClick={() => navigate('/sales/report/weekly')}
-            className="ml-auto flex items-center gap-1 px-2 py-1 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700"
+            className="flex items-center gap-1 px-2 py-1 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700"
           >
             <TrendingUp className="h-3 w-3" />
-            Weekly Report
+            Performance Report
           </button>
           <button
             onClick={() => navigate('/sales/report/fuel')}
@@ -366,61 +424,122 @@ const SalesReport: React.FC = () => {
 
         {/* Filters and Summary */}
         <div className="mb-2 space-y-2">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-            <div>
-              <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
-                Filter by Station
-              </label>
-              <select
-                value={selectedStationId || ''}
-                onChange={(e) => setSelectedStationId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-1.5 py-0.5 text-[11px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Stations</option>
-                {stations.map((station) => (
-                  <option key={station.id} value={station.id}>
-                    {station.name}
-                  </option>
-                ))}
-              </select>
+          <div className="bg-white rounded-lg border border-gray-200 p-2.5">
+            <div className="flex items-center gap-1.5 mb-2">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-gray-400" />
+              <span className="text-[11px] font-semibold text-gray-700">Filters</span>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="ml-auto flex items-center gap-0.5 text-[11px] font-medium text-blue-600 hover:text-blue-700"
+                >
+                  <X className="h-3 w-3" />
+                  Clear all
+                </button>
+              )}
             </div>
-            <div>
-              <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
-                Filter by Client
-              </label>
-              <select
-                value={selectedClientFilter}
-                onChange={(e) => setSelectedClientFilter(e.target.value)}
-                className="w-full px-1.5 py-0.5 text-[11px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Clients</option>
-                {conversionClients.map((client) => (
-                  <option key={`cc-${client.id}`} value={`cc-${client.id}`}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
-                Search
-              </label>
-              <div className="relative">
-                <Search className="absolute left-1.5 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3" />
-                <input
-                  type="text"
-                  placeholder="Search by station, account, vehicle, reference..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-6 pr-1.5 py-0.5 text-[11px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
+
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="w-36">
+                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Date Range</label>
+                <div className="relative">
+                  <Calendar className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400 pointer-events-none" />
+                  <select
+                    value={datePreset}
+                    onChange={(e) => setDatePreset(e.target.value as typeof datePreset)}
+                    className="w-full pl-5 pr-1.5 py-1 text-[11px] border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  >
+                    <option value="this_month">This Month</option>
+                    <option value="last_month">Last Month</option>
+                    <option value="last_30">Last 30 Days</option>
+                    <option value="last_90">Last 90 Days</option>
+                    <option value="all">All Time</option>
+                    <option value="custom">Custom Range</option>
+                  </select>
+                </div>
               </div>
-            </div>
-            <div className="flex items-end">
+
+              {datePreset === 'custom' && (
+                <>
+                  <div className="w-32">
+                    <label className="block text-[10px] font-medium text-gray-500 mb-0.5">From</label>
+                    <input
+                      type="date"
+                      value={customStart}
+                      onChange={(e) => setCustomStart(e.target.value)}
+                      className="w-full px-1.5 py-1 text-[11px] border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="w-32">
+                    <label className="block text-[10px] font-medium text-gray-500 mb-0.5">To</label>
+                    <input
+                      type="date"
+                      value={customEnd}
+                      onChange={(e) => setCustomEnd(e.target.value)}
+                      className="w-full px-1.5 py-1 text-[11px] border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="w-px self-stretch bg-gray-100 hidden sm:block" />
+
+              <div className="min-w-[140px] flex-1">
+                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Station</label>
+                <div className="relative">
+                  <MapPin className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400 pointer-events-none" />
+                  <select
+                    value={selectedStationId || ''}
+                    onChange={(e) => setSelectedStationId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full pl-5 pr-1.5 py-1 text-[11px] border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  >
+                    <option value="">All Stations</option>
+                    {stations.map((station) => (
+                      <option key={station.id} value={station.id}>
+                        {station.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="min-w-[140px] flex-1">
+                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Client</label>
+                <div className="relative">
+                  <Users className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400 pointer-events-none" />
+                  <select
+                    value={selectedClientFilter}
+                    onChange={(e) => setSelectedClientFilter(e.target.value)}
+                    className="w-full pl-5 pr-1.5 py-1 text-[11px] border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  >
+                    <option value="">All Clients</option>
+                    {conversionClients.map((client) => (
+                      <option key={`cc-${client.id}`} value={`cc-${client.id}`}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="min-w-[200px] flex-[2]">
+                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 h-3 w-3 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Station, account, vehicle, reference…"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-5 pr-1.5 py-1 text-[11px] border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
               <button
                 onClick={exportToCSV}
                 disabled={filteredSales.length === 0}
-                className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[11px] bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-1 px-3 py-1 text-[11px] font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                 title={filteredSales.length === 0 ? 'No data to export' : 'Export to CSV'}
               >
                 <Download className="h-3 w-3" />
@@ -463,8 +582,8 @@ const SalesReport: React.FC = () => {
                 <TrendingUp className="h-4 w-4 text-violet-600" />
               </div>
               <div className="min-w-0">
-                <div className="text-[10px] text-gray-500 font-medium truncate">Average price</div>
-                <div className="text-sm font-bold text-gray-900 truncate">{averagePrice.toFixed(2)}</div>
+                <div className="text-[10px] text-gray-500 font-medium truncate">AVV</div>
+                <div className="text-sm font-bold text-gray-900 truncate">{avv.toFixed(2)}</div>
               </div>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-2.5 flex items-center gap-2.5">
@@ -490,6 +609,7 @@ const SalesReport: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
                   <tr>
+                    <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Image</th>
                     <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Sale Date</th>
                     <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Station</th>
                     <th className="px-2 py-1 text-left text-[11px] font-medium text-gray-700">Client</th>
@@ -506,6 +626,22 @@ const SalesReport: React.FC = () => {
                 <tbody className="divide-y divide-gray-200">
                   {filteredSales.map((sale) => (
                     <tr key={sale.id} className="hover:bg-gray-50">
+                      <td className="px-2 py-1 text-[11px]">
+                        {sale.imagePath ? (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedImage(sale.imagePath!)}
+                            className="w-8 h-8 rounded bg-gray-100 overflow-hidden cursor-zoom-in hover:opacity-80 transition-opacity"
+                            title="Click to expand"
+                          >
+                            <img src={sale.imagePath} alt="Sale" className="w-full h-full object-cover" />
+                          </button>
+                        ) : (
+                          <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
+                            <ImageIcon className="h-3.5 w-3.5 text-gray-300" />
+                          </div>
+                        )}
+                      </td>
                       <td className="px-2 py-1 text-[11px]">{formatDate(sale.saleDate)}</td>
                       <td className="px-2 py-1 text-[11px] font-medium">{getStationName(sale.stationId)}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-600">{getOwnerName(sale)}</td>
@@ -525,6 +661,21 @@ const SalesReport: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Image lightbox */}
+      {expandedImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setExpandedImage(null)}
+        >
+          <img
+            src={expandedImage}
+            alt="Sale"
+            className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   )
 }

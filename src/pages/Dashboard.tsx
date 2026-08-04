@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import { adminApiService, JobCard } from '../services/api'
 import { STATUS_STYLES as JOB_STATUS_STYLES, STATUS_LABELS as JOB_STATUS_LABELS } from './JobCardForm'
 import {
@@ -27,6 +28,8 @@ import {
   Star,
   PieChart,
   Megaphone,
+  MapPin,
+  CalendarCheck,
   ArrowRight,
   ChevronRight,
   Loader2,
@@ -68,8 +71,16 @@ interface ModuleTile {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate()
+  const { user, loading: authLoading } = useAuth()
   const [activeJobCards, setActiveJobCards] = useState<JobCard[]>([])
   const [loadingJobCards, setLoadingJobCards] = useState(true)
+
+  // The executive role has its own dashboard — keep them off this one.
+  useEffect(() => {
+    if (!authLoading && user && user.role?.toLowerCase() === 'executive') {
+      navigate('/executive-dashboard', { replace: true })
+    }
+  }, [authLoading, user, navigate])
 
   const fetchActiveJobCards = () => {
     setLoadingJobCards(true)
@@ -103,6 +114,8 @@ const Dashboard: React.FC = () => {
     { name: 'OBD Scanner', icon: Activity, route: '/dashboard', color: 'text-orange-700', bgColor: 'bg-orange-500', badge: undefined, disabled: true },
     { name: 'Labor Guides', icon: FileText, route: '/notices', color: 'text-purple-700', bgColor: 'bg-purple-500', badge: undefined },
     { name: 'HR', icon: Clock, route: '/staff', color: 'text-red-700', bgColor: 'bg-red-500', badge: undefined },
+    { name: 'Attendance', icon: MapPin, route: '/attendance', color: 'text-cyan-700', bgColor: 'bg-cyan-500', badge: undefined },
+    { name: 'Working Days', icon: CalendarCheck, route: '/working-days', color: 'text-lime-700', bgColor: 'bg-lime-500', badge: undefined },
     { name: 'Financing', icon: PieChart, route: '/sales/report', color: 'text-purple-700', bgColor: 'bg-purple-500', badge: undefined, disabled: true },
     { name: 'Marketing', icon: Megaphone, route: '/dashboard', color: 'text-teal-700', bgColor: 'bg-teal-500', badge: undefined },
     { name: 'Reviews', icon: Star, route: '/dashboard', color: 'text-blue-700', bgColor: 'bg-blue-500', badge: 'NEW' },
