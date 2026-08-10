@@ -323,6 +323,34 @@ export interface Station {
   lpgQuantity?: number
 }
 
+export interface StationTank {
+  id: number
+  station_id: number
+  name: string
+  capacity: number
+  current_quantity: number
+  status: 'active' | 'inactive' | 'maintenance'
+  created_at: string
+  updated_at: string
+}
+
+export interface StationLpgLedgerEntry {
+  id: number
+  stationId: number
+  transactionType: 'IN' | 'OUT' | 'ADJUSTMENT'
+  quantityIn: number
+  quantityOut: number
+  balance: number
+  quantity: number
+  previousQuantity: number
+  newQuantity: number
+  referenceNumber?: string | null
+  notes?: string | null
+  createdBy?: number | null
+  createdByStaff?: Staff
+  created_at: string
+}
+
 export interface Shift {
   id: number
   date: string
@@ -654,6 +682,22 @@ export interface JobCard {
   updated_at: string
 }
 
+export type JobCardPaymentMethod = 'cash' | 'mobile_money' | 'card' | 'bank_transfer' | 'cheque' | 'other'
+
+export interface JobCardPayment {
+  id: number
+  job_card_id: number
+  amount: number
+  payment_method: JobCardPaymentMethod
+  reference?: string | null
+  payment_date: string
+  notes?: string | null
+  posted_by?: number | null
+  postedBy?: Staff
+  jobCard?: JobCard
+  created_at: string
+}
+
 export interface VehicleInspection {
   id: number
   conversion_vehicle_id: number
@@ -723,6 +767,9 @@ export interface FuelPrice {
   station?: Station
   price: number
   fuelType: string | null
+  /** Effective window. endDate null = still in force. */
+  startDate?: string | null
+  endDate?: string | null
   notes: string | null
   created_at: string
 }
@@ -2287,6 +2334,53 @@ class AdminApiService {
   }
 
   // Stations Management
+  // Station LPG tanks
+  async getStationTanks(stationId?: number): Promise<StationTank[]> {
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 200))
+      return []
+    }
+    const qs = stationId ? `?stationId=${stationId}` : ''
+    try {
+      return await this.request<StationTank[]>(`/station-tanks${qs}`)
+    } catch (error) {
+      console.error('⛽ [API] getStationTanks failed:', error)
+      return []
+    }
+  }
+
+  async createStationTank(data: Partial<StationTank>): Promise<StationTank> {
+    return this.request<StationTank>('/station-tanks', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async updateStationTank(id: number, data: Partial<StationTank>): Promise<StationTank> {
+    return this.request<StationTank>(`/station-tanks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteStationTank(id: number): Promise<void> {
+    return this.request<void>(`/station-tanks/${id}`, { method: 'DELETE' })
+  }
+
+  async getStationLpgLedger(stationId: number): Promise<StationLpgLedgerEntry[]> {
+    console.log('⛽ [API] getStationLpgLedger called for station:', stationId)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return []
+    }
+    try {
+      return await this.request<StationLpgLedgerEntry[]>(`/stations/${stationId}/lpg-ledger`)
+    } catch (error) {
+      console.error('⛽ [API] getStationLpgLedger failed:', error)
+      return []
+    }
+  }
+
   async getStations(): Promise<Station[]> {
     console.log('🚉 [API] getStations called')
     if (USE_MOCK_DATA) {
@@ -3040,6 +3134,51 @@ class AdminApiService {
       return { id, status: 'not_paid' } as JobCard
     }
     return this.request<JobCard>(`/job-cards/${id}/convert-to-invoice`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  // Job Card Payments
+  async getAllPayments(): Promise<JobCardPayment[]> {
+    console.log('💰 [API] getAllPayments called')
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return []
+    }
+    return this.request<JobCardPayment[]>('/payments')
+  }
+
+  async getJobCardPayments(jobCardId: number): Promise<JobCardPayment[]> {
+    console.log('💰 [API] getJobCardPayments called for job card:', jobCardId)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return []
+    }
+    return this.request<JobCardPayment[]>(`/job-cards/${jobCardId}/payments`)
+  }
+
+  async createJobCardPayment(
+    jobCardId: number,
+    data: {
+      amount: number
+      payment_method: JobCardPaymentMethod
+      payment_date: string
+      reference?: string
+      notes?: string
+    }
+  ): Promise<JobCardPayment> {
+    console.log('💰 [API] createJobCardPayment called for job card:', jobCardId)
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        id: Date.now(),
+        job_card_id: jobCardId,
+        ...data,
+        created_at: new Date().toISOString()
+      } as JobCardPayment
+    }
+    return this.request<JobCardPayment>(`/job-cards/${jobCardId}/payments`, {
       method: 'POST',
       body: JSON.stringify(data)
     })

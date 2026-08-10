@@ -29,6 +29,7 @@ import {
   Loader2,
   TrendingUp,
   TrendingDown,
+  Fuel,
 } from 'lucide-react'
 
 const money = (n: number) => `Ksh ${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -37,6 +38,13 @@ function compactMoney(n: number) {
   if (Math.abs(n) >= 1_000_000) return `Ksh ${(n / 1_000_000).toFixed(1)}M`
   if (Math.abs(n) >= 1_000) return `Ksh ${(n / 1_000).toFixed(1)}K`
   return money(n)
+}
+
+// Bare compact number — keeps the volume axis to a few characters wide.
+function compactNumber(n: number) {
+  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return Math.round(n).toString()
 }
 
 // Fixed categorical order (never cycled/reassigned by rank) — 5 station slots + a gray "Other" fold.
@@ -60,6 +68,7 @@ const MODULES: ModuleTile[] = [
   { name: 'Parts', icon: Package, route: '/parts', color: 'text-amber-700', bgColor: 'bg-amber-500', badge: undefined },
   { name: 'Stores', icon: Store, route: '/stores', color: 'text-emerald-700', bgColor: 'bg-emerald-500', badge: undefined },
   { name: 'Inventory', icon: Warehouse, route: '/inventory', color: 'text-green-700', bgColor: 'bg-green-500', badge: undefined },
+  { name: 'LPG Stock', icon: Fuel, route: '/inventory/lpg', color: 'text-orange-700', bgColor: 'bg-orange-500', badge: undefined },
   { name: 'Employees', icon: UserCheck, route: '/employees', color: 'text-teal-700', bgColor: 'bg-teal-500', badge: undefined },
   { name: 'Sales Report', icon: BarChart3, route: '/sales/report', color: 'text-pink-700', bgColor: 'bg-pink-500', badge: undefined },
   { name: 'Conversion', icon: Wrench, route: '/conversion', color: 'text-purple-700', bgColor: 'bg-purple-500', badge: undefined },
@@ -222,11 +231,13 @@ const ExecutiveDashboard: React.FC = () => {
       months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleString(undefined, { month: 'short' }) })
     }
     const revenueByMonth = new Map<string, number>()
+    const volumeByMonth = new Map<string, number>()
     const vehiclesByMonth = new Map<string, Set<string>>()
     for (const s of sales) {
       const d = new Date(s.saleDate)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       revenueByMonth.set(key, (revenueByMonth.get(key) || 0) + Number(s.totalAmount))
+      volumeByMonth.set(key, (volumeByMonth.get(key) || 0) + Number(s.quantity))
       const vehicleKey = s.vehicleId ? `v-${s.vehicleId}` : s.conversionVehicleId ? `cv-${s.conversionVehicleId}` : null
       if (vehicleKey) {
         if (!vehiclesByMonth.has(key)) vehiclesByMonth.set(key, new Set())
@@ -236,11 +247,15 @@ const ExecutiveDashboard: React.FC = () => {
     return months.map(m => ({
       label: m.label,
       value: revenueByMonth.get(m.key) || 0,
+      volume: volumeByMonth.get(m.key) || 0,
       vehicles: vehiclesByMonth.get(m.key)?.size || 0,
     }))
   }, [sales])
 
   const maxMonthlyRevenue = Math.max(...monthlyRevenue.map(m => m.value), 1)
+  // Volume rides its own scale — litres and shillings differ by orders of magnitude,
+  // so a shared axis would flatten the volume line onto the floor.
+  const maxMonthlyVolume = Math.max(...monthlyRevenue.map(m => m.volume), 1)
 
   // Same "unique vehicles" logic as /sales/report — vehicleId and conversionVehicleId are
   // independent id spaces, so they're namespaced to avoid a false collision between them.
@@ -265,10 +280,16 @@ const ExecutiveDashboard: React.FC = () => {
   }, [monthlyRevenue])
 
   const CHART_HEIGHT = 220
+  // Two hues far enough apart to read at a glance, each also colouring its own axis.
+  // Volume is a saturated cyan rather than a pale blue — a light tint reads as
+  // secondary and disappears against the gridlines.
+  const REVENUE_COLOR = '#6d28d9'
+  const VOLUME_COLOR = '#0891b2'
   const chartPoints = monthlyRevenue.map((m, i) => {
     const x = monthlyRevenue.length > 1 ? (i / (monthlyRevenue.length - 1)) * 100 : 50
     const y = CHART_HEIGHT - Math.max((m.value / maxMonthlyRevenue) * CHART_HEIGHT, m.value > 0 ? 4 : 0)
-    return { ...m, x, y }
+    const volumeY = CHART_HEIGHT - Math.max((m.volume / maxMonthlyVolume) * CHART_HEIGHT, m.volume > 0 ? 4 : 0)
+    return { ...m, x, y, volumeY }
   })
   // Smooth curve: cubic bezier between each pair, control points offset horizontally to the
   // midpoint (y pinned to each endpoint) — a simple, overshoot-free interpolation with no library.
@@ -281,6 +302,14 @@ const ExecutiveDashboard: React.FC = () => {
     : ''
   const smoothAreaPath = chartPoints.length
     ? `${smoothLinePath} L ${chartPoints[chartPoints.length - 1].x} ${CHART_HEIGHT} L ${chartPoints[0].x} ${CHART_HEIGHT} Z`
+    : ''
+
+  const smoothVolumePath = chartPoints.length
+    ? chartPoints.slice(1).reduce((d, p, i) => {
+        const prev = chartPoints[i]
+        const midX = (prev.x + p.x) / 2
+        return `${d} C ${midX} ${prev.volumeY}, ${midX} ${p.volumeY}, ${p.x} ${p.volumeY}`
+      }, `M ${chartPoints[0].x} ${chartPoints[0].volumeY}`)
     : ''
 
   return (
@@ -367,17 +396,23 @@ const ExecutiveDashboard: React.FC = () => {
                     </span>
                   </p>
                 </div>
-                <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                  <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
-                  Revenue
-                </span>
               </div>
 
-              <div className="flex gap-3 mt-4">
-                {/* Y-axis labels */}
-                <div className="flex flex-col justify-between text-[10px] text-gray-400 font-medium text-right" style={{ height: CHART_HEIGHT }}>
+              {/* Series captions sit above their own axis — each colour names its scale,
+                  so no separate legend is needed. */}
+              <div className="flex items-baseline justify-between mt-5 mb-1.5">
+                <span className="text-[11px] font-medium" style={{ color: REVENUE_COLOR }}>Revenue</span>
+                <span className="text-[11px] font-semibold" style={{ color: VOLUME_COLOR }}>Volume (L)</span>
+              </div>
+
+              <div className="flex gap-2">
+                {/* Revenue axis */}
+                <div
+                  className="flex flex-col justify-between text-[10px] text-right shrink-0"
+                  style={{ height: CHART_HEIGHT, color: REVENUE_COLOR }}
+                >
                   {[4, 3, 2, 1, 0].map(step => (
-                    <span key={step}>{compactMoney((maxMonthlyRevenue * step) / 4)}</span>
+                    <span key={step} className="leading-none">{compactMoney((maxMonthlyRevenue * step) / 4)}</span>
                   ))}
                 </div>
 
@@ -391,49 +426,68 @@ const ExecutiveDashboard: React.FC = () => {
                       ))}
                     </div>
 
-                    {/* Smooth line + area fill */}
                     <svg
-                      className="absolute inset-0 w-full h-full"
+                      className="absolute inset-0 w-full h-full overflow-visible"
                       viewBox={`0 0 100 ${CHART_HEIGHT}`}
                       preserveAspectRatio="none"
                     >
-                      <defs>
-                        <linearGradient id="revenueAreaFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#2563eb" stopOpacity="0.2" />
-                          <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
-                        </linearGradient>
-                      </defs>
-                      <path d={smoothAreaPath} fill="url(#revenueAreaFill)" stroke="none" />
                       <path
                         d={smoothLinePath}
                         fill="none"
-                        stroke="#2563eb"
-                        strokeWidth={2}
+                        stroke={REVENUE_COLOR}
+                        strokeWidth={1.75}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <path
+                        d={smoothVolumePath}
+                        fill="none"
+                        stroke={VOLUME_COLOR}
+                        strokeWidth={2.25}
                         strokeLinejoin="round"
                         strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
                       />
                     </svg>
 
-                    {/* Point markers + hover tooltips */}
+                    {/* Invisible hover columns — the reference draws bare lines, so the dots are
+                        gone, but each month still needs a target for its tooltip. */}
                     {chartPoints.map((p, i) => (
                       <div
                         key={p.label + i}
-                        className="absolute group"
-                        style={{ left: `${p.x}%`, top: `${p.y}px`, width: 20, height: 20, transform: 'translate(-50%, -50%)' }}
+                        className="absolute group top-0 h-full"
+                        style={{
+                          left: `${p.x}%`,
+                          width: `${100 / Math.max(chartPoints.length, 1)}%`,
+                          transform: 'translateX(-50%)',
+                        }}
                       >
-                        <div className="w-full h-full flex items-center justify-center cursor-default">
-                          <div className="w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white shadow group-hover:scale-125 transition-transform" />
+                        <div className="w-full h-full opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute inset-y-0 left-1/2 w-px bg-gray-200" />
+                          <div
+                            className="absolute w-1.5 h-1.5 rounded-full left-1/2"
+                            style={{ top: p.y, backgroundColor: REVENUE_COLOR, transform: 'translate(-50%, -50%)' }}
+                          />
+                          <div
+                            className="absolute w-1.5 h-1.5 rounded-full left-1/2"
+                            style={{ top: p.volumeY, backgroundColor: VOLUME_COLOR, transform: 'translate(-50%, -50%)' }}
+                          />
                         </div>
-                        <div className="absolute -top-9 left-1/2 -translate-x-1/2 px-2 py-1 rounded-md bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap pointer-events-none z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div>{money(p.value)}</div>
-                          <div className="text-gray-300">{p.vehicles} vehicle{p.vehicles === 1 ? '' : 's'}</div>
+                        <div className="absolute top-2 left-1/2 -translate-x-1/2 px-2 py-1 rounded-md bg-gray-900 text-white text-[10px] font-medium whitespace-nowrap pointer-events-none z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="text-gray-400">{p.label}</div>
+                          <div style={{ color: '#c4b5fd' }}>{money(p.value)}</div>
+                          <div style={{ color: '#67e8f9' }}>
+                            {p.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                          </div>
+                          <div className="text-gray-400">{p.vehicles} vehicle{p.vehicles === 1 ? '' : 's'}</div>
                         </div>
                       </div>
                     ))}
                   </div>
+
                   {/* Month labels — positioned at the same x as their point, not evenly split */}
-                  <div className="relative mt-1.5" style={{ height: 14 }}>
+                  <div className="relative mt-2" style={{ height: 14 }}>
                     {chartPoints.map((p, i) => {
                       const isFirst = i === 0
                       const isLast = i === chartPoints.length - 1
@@ -441,14 +495,26 @@ const ExecutiveDashboard: React.FC = () => {
                       return (
                         <span
                           key={p.label + i}
-                          className="absolute top-0 text-[10px] text-gray-400 font-medium whitespace-nowrap"
-                          style={{ left: `${p.x}%`, transform: `translateX(${translateX})` }}
+                          className="absolute top-0 text-[10px] whitespace-nowrap"
+                          style={{ left: `${p.x}%`, transform: `translateX(${translateX})`, color: '#9ca3af' }}
                         >
                           {p.label}
                         </span>
                       )
                     })}
                   </div>
+                </div>
+
+                {/* Volume axis — its own scale, so neither line flattens against the other */}
+                <div
+                  className="flex flex-col justify-between text-[10px] shrink-0"
+                  style={{ height: CHART_HEIGHT, color: VOLUME_COLOR }}
+                >
+                  {[4, 3, 2, 1, 0].map(step => (
+                    <span key={step} className="leading-none">
+                      {compactNumber((maxMonthlyVolume * step) / 4)}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>

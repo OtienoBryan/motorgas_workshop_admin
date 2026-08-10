@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { adminApiService, ConversionClient, ConversionVehicle, Part, Service, JobCardItem, Staff, Store } from '../services/api'
+import { adminApiService, ConversionClient, ConversionVehicle, Part, Service, JobCardItem, Staff, Store, JobCardPayment, JobCardPaymentMethod } from '../services/api'
 import {
   ChevronLeft,
   User,
@@ -19,7 +19,20 @@ import {
   UserCog,
   FileText,
   ArrowRightLeft,
+  Wallet,
+  Receipt,
 } from 'lucide-react'
+
+const PAYMENT_METHODS: { value: JobCardPaymentMethod; label: string }[] = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'mobile_money', label: 'Mobile Money' },
+  { value: 'card', label: 'Card' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'cheque', label: 'Cheque' },
+  { value: 'other', label: 'Other' },
+]
+
+const todayInput = () => new Date().toISOString().slice(0, 10)
 
 interface ItemDraft extends JobCardItem {
   key: string
@@ -110,6 +123,16 @@ const JobCardForm: React.FC = () => {
   const [laborSearch, setLaborSearch] = useState('')
   const [laborDropdownOpen, setLaborDropdownOpen] = useState(false)
 
+  const [payments, setPayments] = useState<JobCardPayment[]>([])
+  const [paymentsModalOpen, setPaymentsModalOpen] = useState(false)
+  const [loadingPayments, setLoadingPayments] = useState(false)
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [savingPayment, setSavingPayment] = useState(false)
+  const [payMethod, setPayMethod] = useState<JobCardPaymentMethod>('cash')
+  const [payDate, setPayDate] = useState(todayInput())
+  const [payReference, setPayReference] = useState('')
+  const [payAmount, setPayAmount] = useState('')
+
   const [convertModalOpen, setConvertModalOpen] = useState(false)
   const [converting, setConverting] = useState(false)
   const [updateInventoryChoice, setUpdateInventoryChoice] = useState(true)
@@ -149,6 +172,7 @@ const JobCardForm: React.FC = () => {
         setOtherCharges(Number(jc.other_charges))
         setAmountPaid(Number(jc.amount_paid))
         setItems((jc.items || []).map(i => ({ ...i, key: newKey() })))
+        adminApiService.getJobCardPayments(Number(id)).then(setPayments).catch(() => setPayments([]))
       } catch {
         alert('Failed to load job card')
         navigate('/job-cards')
@@ -329,6 +353,73 @@ const JobCardForm: React.FC = () => {
       alert(`Failed to convert to invoice: ${(error as any).message || 'Unknown error'}`)
     } finally {
       setConverting(false)
+    }
+  }
+
+  // Balance remaining after each payment, keyed by payment id. Computed oldest-first
+  // even though the list renders newest-first.
+  const runningBalances = useMemo(() => {
+    const paymentsTotal = payments.reduce((sum, p) => sum + Number(p.amount), 0)
+    // A job card may carry an amount_paid that predates the payments ledger; treat
+    // the unlogged difference as already settled so the oldest row still reconciles.
+    const opening = total - Math.max(0, amountPaid - paymentsTotal)
+
+    const chronological = [...payments].sort((a, b) =>
+      a.payment_date === b.payment_date ? a.id - b.id : a.payment_date < b.payment_date ? -1 : 1
+    )
+
+    const balances: Record<number, number> = {}
+    let balance = opening
+    for (const p of chronological) {
+      balance -= Number(p.amount)
+      balances[p.id] = balance
+    }
+    return balances
+  }, [payments, total, amountPaid])
+
+  const openPaymentsModal = async () => {
+    setPaymentsModalOpen(true)
+    // Another user may have posted against this job card since the page loaded.
+    try {
+      setLoadingPayments(true)
+      setPayments(await adminApiService.getJobCardPayments(Number(id)))
+    } catch {
+      // Keep whatever is already in state rather than blanking the list.
+    } finally {
+      setLoadingPayments(false)
+    }
+  }
+
+  const openPaymentModal = () => {
+    setPayMethod('cash')
+    setPayDate(todayInput())
+    setPayReference('')
+    setPayAmount('')
+    setPaymentModalOpen(true)
+  }
+
+  const handlePostPayment = async () => {
+    const amount = Number(payAmount)
+    if (!amount || amount <= 0) { alert('Enter an amount greater than zero'); return }
+    if (!payDate) { alert('Choose a payment date'); return }
+
+    try {
+      setSavingPayment(true)
+      const created = await adminApiService.createJobCardPayment(Number(id), {
+        amount,
+        payment_method: payMethod,
+        payment_date: payDate,
+        reference: payReference.trim() || undefined,
+      })
+      setPayments(prev => [created, ...prev])
+      // The backend adds this to job_cards.amount_paid; mirror it so a later
+      // save doesn't push a stale total back over it.
+      setAmountPaid(prev => prev + Number(created.amount))
+      setPaymentModalOpen(false)
+    } catch (error) {
+      alert(`Failed to post payment: ${(error as any).message || 'Unknown error'}`)
+    } finally {
+      setSavingPayment(false)
     }
   }
 
@@ -782,12 +873,55 @@ const JobCardForm: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">Payments</p>
-            <div className="flex items-center justify-between text-xs mb-2">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-gray-900 uppercase tracking-wide">Payments</p>
+              {isEditing && (
+                <button
+                  onClick={openPaymentModal}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  Post Payment
+                </button>
+              )}
+            </div>
+
+            {!isEditing && (
+              <p className="text-[11px] text-gray-400 mb-2">Save the quotation before recording payments.</p>
+            )}
+
+            {payments.length > 0 && (
+              <div className="space-y-1.5 mb-3">
+                {payments.slice(0, 3).map(p => (
+                  <div key={p.id} className="flex items-start justify-between gap-2 text-[11px]">
+                    <div className="min-w-0">
+                      <p className="text-gray-700 font-medium">
+                        {PAYMENT_METHODS.find(m => m.value === p.payment_method)?.label || p.payment_method}
+                      </p>
+                      <p className="text-gray-400">
+                        {new Date(p.payment_date).toLocaleDateString()}
+                        {p.reference ? ` · ${p.reference}` : ''}
+                      </p>
+                    </div>
+                    <span className="text-gray-900 font-semibold whitespace-nowrap">{money(Number(p.amount))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isEditing && (
+              <button
+                onClick={openPaymentsModal}
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 mb-1 text-[11px] font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Receipt className="h-3 w-3" />
+                View All Payments{payments.length > 0 ? ` (${payments.length})` : ''}
+              </button>
+            )}
+
+            <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-100">
               <span className="text-gray-500">Amount Paid</span>
-              <input type="number" min="0" step="0.01" value={amountPaid}
-                onChange={e => setAmountPaid(Number(e.target.value) || 0)}
-                className="w-24 text-xs text-right px-1.5 py-0.5 border border-gray-200 rounded" />
+              <span className="text-gray-900 font-semibold">{money(amountPaid)}</span>
             </div>
             <div className="flex items-center justify-between pt-2 mt-2 border-t border-gray-100">
               <span className="text-sm font-semibold text-gray-900">Balance Due</span>
@@ -818,6 +952,180 @@ const JobCardForm: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ── All payments modal ── */}
+      {paymentsModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-green-50 flex items-center justify-center">
+                  <Receipt className="h-4 w-4 text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900">Payments</h2>
+                  <p className="text-[11px] text-gray-400">{isQuotation ? 'Quotation' : 'Invoice'} #{id}</p>
+                </div>
+              </div>
+              <button onClick={() => setPaymentsModalOpen(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {loadingPayments ? (
+                <div className="flex items-center justify-center py-10 text-gray-400">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+              ) : payments.length === 0 ? (
+                <div className="text-center py-10">
+                  <Wallet className="h-8 w-8 text-gray-200 mx-auto mb-2" />
+                  <p className="text-xs text-gray-400">No payments recorded yet.</p>
+                </div>
+              ) : (
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                      <th className="py-2 pr-3 font-medium">Date</th>
+                      <th className="py-2 pr-3 font-medium">Method</th>
+                      <th className="py-2 pr-3 font-medium">Reference</th>
+                      <th className="py-2 px-3 font-medium text-right">Amount</th>
+                      <th className="py-2 pl-3 font-medium text-right">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {payments.map(p => (
+                      <tr key={p.id}>
+                        <td className="py-2 pr-3 text-gray-700 whitespace-nowrap">
+                          {new Date(p.payment_date).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 pr-3 text-gray-700">
+                          {PAYMENT_METHODS.find(m => m.value === p.payment_method)?.label || p.payment_method}
+                        </td>
+                        <td className="py-2 pr-3 text-gray-500">{p.reference || '—'}</td>
+                        <td className="py-2 px-3 text-gray-900 font-semibold text-right whitespace-nowrap">
+                          {money(Number(p.amount))}
+                        </td>
+                        <td className={`py-2 pl-3 text-right whitespace-nowrap ${(runningBalances[p.id] ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {money(runningBalances[p.id] ?? 0)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-100 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">Total Paid</span>
+                <span className="text-gray-900 font-semibold">{money(amountPaid)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-900">Balance Due</span>
+                <span className={`text-sm font-bold ${balanceDue > 0 ? 'text-red-600' : 'text-gray-900'}`}>{money(balanceDue)}</span>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setPaymentsModalOpen(false)}
+                  className="px-4 py-2 text-xs font-medium text-gray-600 hover:text-gray-900"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => { setPaymentsModalOpen(false); openPaymentModal() }}
+                  className="px-4 py-2 text-xs font-semibold bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center gap-1.5"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Post Payment
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Post payment modal ── */}
+      {paymentModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-green-50 flex items-center justify-center">
+                  <Wallet className="h-4 w-4 text-green-600" />
+                </div>
+                <h2 className="text-sm font-semibold text-gray-900">Post Payment</h2>
+              </div>
+              <button onClick={() => setPaymentModalOpen(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              <div className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+                <span className="text-gray-500">Balance Due</span>
+                <span className={`font-bold ${balanceDue > 0 ? 'text-red-600' : 'text-gray-900'}`}>{money(balanceDue)}</span>
+              </div>
+
+              <div>
+                <label className={lbl}>Payment Method *</label>
+                <select value={payMethod} onChange={e => setPayMethod(e.target.value as JobCardPaymentMethod)} className={inp}>
+                  {PAYMENT_METHODS.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>Payment Date *</label>
+                  <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Amount Paid *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={payAmount}
+                    onChange={e => setPayAmount(e.target.value)}
+                    placeholder="0.00"
+                    className={inp}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={lbl}>Payment Reference</label>
+                <input
+                  type="text"
+                  value={payReference}
+                  onChange={e => setPayReference(e.target.value)}
+                  placeholder="M-Pesa code, cheque no., etc."
+                  className={inp}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button
+                onClick={() => setPaymentModalOpen(false)}
+                className="px-4 py-2 text-xs font-medium text-gray-600 hover:text-gray-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePostPayment}
+                disabled={savingPayment}
+                className="px-4 py-2 text-xs font-semibold bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                {savingPayment && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {savingPayment ? 'Posting…' : 'Post Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Convert to invoice modal ── */}
       {convertModalOpen && (

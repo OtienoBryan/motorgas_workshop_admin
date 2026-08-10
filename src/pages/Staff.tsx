@@ -7,10 +7,13 @@ import {
   Trash2,
   UserCheck,
   UserX,
-  Plus
+  Plus,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 
 const STAFF_ROLES = ['staff', 'manager', 'executive']
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
 // Avatar component for staff without images
 const StaffAvatar: React.FC<{ name: string; className?: string }> = ({ name, className = "h-10 w-10" }) => {
@@ -59,6 +62,8 @@ const StaffPage: React.FC = () => {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [addingStaff, setAddingStaff] = useState(false)
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0])
 
   useEffect(() => {
     loadData()
@@ -109,6 +114,15 @@ const StaffPage: React.FC = () => {
 
     return matchesSearch && matchesDepartment && matchesEmploymentType && matchesStatus
   })
+
+  const totalPages = Math.max(1, Math.ceil(filteredStaff.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedStaff = filteredStaff.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+  // A narrowed result set can leave you stranded on a page that no longer exists.
+  useEffect(() => {
+    setPage(1)
+  }, [searchTerm, departmentFilter, employmentTypeFilter, statusFilter, pageSize])
 
   const getUniqueValues = (key: keyof Staff) => {
     return Array.from(new Set(staff.map(member => member[key]).filter(Boolean)))
@@ -481,10 +495,10 @@ const StaffPage: React.FC = () => {
                   Employee ID
                 </th>
                 <th className="px-2 py-1.5 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                  Department
+                  Role
                 </th>
                 <th className="px-2 py-1.5 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                  Employment Type
+                  Phone Number
                 </th>
                 <th className="px-2 py-1.5 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                   Status
@@ -495,34 +509,22 @@ const StaffPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredStaff.map((member) => (
+              {paginatedStaff.map((member) => (
                 <tr key={member.id} className="hover:bg-gray-50">
                   <td className="px-2 py-1.5 whitespace-nowrap">
-                    <div className="flex items-center">
-                      {member.photo_url || member.avatar_url ? (
-                        <img
-                          src={member.photo_url || member.avatar_url}
-                          alt={member.name}
-                          className="h-6 w-6 rounded-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => setEnlargedImage(member.photo_url || member.avatar_url || '')}
-                        />
-                      ) : (
-                        <StaffAvatar name={member.name} className="h-6 w-6" />
-                      )}
-                      <div className="ml-2">
-                        <div className="text-[11px] font-medium text-gray-900">{member.name}</div>
-                        <div className="text-[10px] text-gray-500">{member.business_email}</div>
-                      </div>
+                    <div>
+                      <div className="text-[11px] font-medium text-gray-900">{member.name}</div>
+                      <div className="text-[10px] text-gray-500">{member.business_email}</div>
                     </div>
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
                     <div className="text-[11px] text-gray-900">{member.empl_no}</div>
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
-                    <div className="text-[11px] text-gray-900">{member.department || 'N/A'}</div>
+                    <div className="text-[11px] text-gray-900 capitalize">{member.role || 'N/A'}</div>
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
-                    <div className="text-[11px] text-gray-900">{member.employment_type}</div>
+                    <div className="text-[11px] text-gray-900">{member.phone_number || 'N/A'}</div>
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
                     {getStatusBadge(member.is_active)}
@@ -554,6 +556,61 @@ const StaffPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {filteredStaff.length > 0 && (
+          <div className="flex items-center justify-between px-2 py-1.5 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] text-gray-500">
+                Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredStaff.length)} of {filteredStaff.length}
+              </p>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="border border-gray-200 rounded px-1 py-0.5 text-[10px] text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {PAGE_SIZE_OPTIONS.map(size => (
+                  <option key={size} value={size}>{size} / page</option>
+                ))}
+              </select>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="p-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                >
+                  <ChevronLeft className="h-3 w-3" />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(n => n === 1 || n === totalPages || Math.abs(n - safePage) <= 1)
+                  .reduce<(number | '…')[]>((acc, n, idx, arr) => {
+                    if (idx > 0 && n - (arr[idx - 1] as number) > 1) acc.push('…')
+                    acc.push(n); return acc
+                  }, [])
+                  .map((n, i) => n === '…'
+                    ? <span key={`e${i}`} className="px-0.5 text-[10px] text-gray-400">…</span>
+                    : <button
+                        key={n}
+                        onClick={() => setPage(n as number)}
+                        className={`w-6 h-6 text-[10px] rounded border transition-colors ${safePage === n ? 'bg-blue-600 border-blue-600 text-white font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                      >
+                        {n}
+                      </button>
+                  )}
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="p-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                >
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Details Modal */}

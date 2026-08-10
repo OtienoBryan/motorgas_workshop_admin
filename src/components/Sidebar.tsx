@@ -12,7 +12,9 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Truck
+  Truck,
+  Wallet,
+  Fuel
 } from 'lucide-react'
 
 interface NavItem {
@@ -26,9 +28,11 @@ const navItems: NavItem[] = [
   { name: 'Clients', icon: Users, route: '/clients' },
   { name: 'Vehicles', icon: Car, route: '/vehicles' },
   { name: 'Inventory', icon: Warehouse, route: '/inventory' },
+  { name: 'LPG Stock', icon: Fuel, route: '/inventory/lpg' },
   { name: 'Vendors', icon: Truck, route: '/vendors' },
   { name: 'Accounting', icon: Calculator, route: '/accounts' },
   { name: 'JobCards', icon: ClipboardList, route: '/job-cards' },
+  { name: 'Payments', icon: Wallet, route: '/payments' },
   { name: 'Appointments', icon: CalendarClock, route: '/calendar' },
 ]
 

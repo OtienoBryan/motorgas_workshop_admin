@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   History,
+  Gauge,
 } from 'lucide-react'
 
 const PAYMENT_METHODS = [
@@ -191,6 +192,9 @@ const StationSalesDetail: React.FC = () => {
     saleCount: acc.saleCount + d.saleCount,
   }), { cash: 0, card: 0, mpesa: 0, credit: 0, other: 0, quantity: 0, total: 0, saleCount: 0 })
 
+  // Average vend volume — litres per sale across the period.
+  const avv = grandTotal.saleCount === 0 ? 0 : grandTotal.quantity / grandTotal.saleCount
+
   const exportToCSV = () => {
     if (dailyBreakdown.length === 0) {
       alert('No data to export')
@@ -252,6 +256,16 @@ const StationSalesDetail: React.FC = () => {
     }
     return { posted, variance }
   }, [dailyBreakdown, postingsByDay])
+
+  // Carry the active date filter across so Back returns to the same view.
+  const openDaySales = (day: DailySummary) => {
+    const params = new URLSearchParams({ preset: datePreset })
+    if (datePreset === 'custom') {
+      if (customStart) params.set('start', customStart)
+      if (customEnd) params.set('end', customEnd)
+    }
+    navigate(`/sales/report/summary/${stationId}/day/${day.dateKey}?${params.toString()}`)
+  }
 
   const openPostingModal = (day: DailySummary) => {
     const existing = postingsByDay.get(day.dateKey)
@@ -407,7 +421,7 @@ const StationSalesDetail: React.FC = () => {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <div className="bg-white rounded-lg border border-gray-200 p-2.5 flex items-center gap-2.5">
               <div className="shrink-0 h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
                 <Receipt className="h-4 w-4 text-blue-600" />
@@ -433,6 +447,15 @@ const StationSalesDetail: React.FC = () => {
               <div className="min-w-0">
                 <div className="text-[10px] text-gray-500 font-medium truncate">Total sales value</div>
                 <div className="text-sm font-bold text-gray-900 truncate">{money(grandTotal.total)}</div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-2.5 flex items-center gap-2.5">
+              <div className="shrink-0 h-8 w-8 rounded-lg bg-purple-50 flex items-center justify-center">
+                <Gauge className="h-4 w-4 text-purple-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] text-gray-500 font-medium truncate">AVV</div>
+                <div className="text-sm font-bold text-gray-900 truncate">{money(avv)} L</div>
               </div>
             </div>
           </div>
@@ -475,7 +498,15 @@ const StationSalesDetail: React.FC = () => {
                     const totalVariance = existingRows ? existingRows.reduce((sum, r) => sum + r.variance, 0) : 0
                     return (
                       <tr key={d.dateKey} className="hover:bg-gray-50">
-                        <td className="px-2 py-1 text-[11px] font-medium text-gray-900 whitespace-nowrap">{d.dateLabel}</td>
+                        <td className="px-2 py-1 whitespace-nowrap">
+                          <button
+                            onClick={() => openDaySales(d)}
+                            className="text-[11px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                            title={`View the ${d.saleCount} individual sale${d.saleCount === 1 ? '' : 's'} on this day`}
+                          >
+                            {d.dateLabel}
+                          </button>
+                        </td>
                         <td className="px-2 py-1 text-[11px] text-right text-gray-600">{d.cash > 0 ? money(d.cash) : '—'}</td>
                         <td className="px-2 py-1 text-[11px] text-right text-gray-600">{d.card > 0 ? money(d.card) : '—'}</td>
                         <td className="px-2 py-1 text-[11px] text-right text-gray-600">{d.mpesa > 0 ? money(d.mpesa) : '—'}</td>
@@ -554,6 +585,7 @@ const StationSalesDetail: React.FC = () => {
           )}
         </div>
       </div>
+
 
       {/* Post Accountant Amounts Modal */}
       {showPostingModal && (

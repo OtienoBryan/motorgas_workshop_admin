@@ -11,6 +11,7 @@ import {
   CalendarRange,
   Fuel,
   Receipt,
+  TrendingUp,
 } from 'lucide-react'
 
 interface AccountCard {
@@ -41,6 +42,15 @@ const CARDS: AccountCard[] = [
     route: '/quotations',
     description: 'Review open, sent, and approved quotations awaiting conversion into invoices.',
     features: ['Quotation status tracking', 'Total quoted value', 'Client and plate search', 'One-click convert to invoice'],
+  },
+  {
+    slug: 'profit-loss',
+    name: 'Profit & Loss',
+    icon: TrendingUp,
+    gradient: 'from-green-500 to-green-600',
+    route: '/accounts/profit-loss',
+    description: 'Standard profit and loss statement — income, cost of goods sold, gross profit, and net profit for any period.',
+    features: ['Income and COGS breakdown', '% of income column', 'Date range filtering', 'Print and PDF export'],
   },
   {
     slug: 'sales-report',

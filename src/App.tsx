@@ -34,11 +34,14 @@ import Stations from './pages/Stations'
 import FuelPrices from './pages/FuelPrices'
 import Inventory from './pages/Inventory'
 import InventoryReport from './pages/InventoryReport'
+import LpgInventory from './pages/LpgInventory'
+import StationLpgLedger from './pages/StationLpgLedger'
 import PostSale from './pages/PostSale'
 import KeyAccountLedgerReport from './pages/KeyAccountLedgerReport'
 import SalesReport from './pages/SalesReport'
 import SalesSummaryReport from './pages/SalesSummaryReport'
 import StationSalesDetail from './pages/StationSalesDetail'
+import StationDaySales from './pages/StationDaySales'
 import StationVarianceReport from './pages/StationVarianceReport'
 import WeeklySalesReport from './pages/WeeklySalesReport'
 import VehicleFuelReport from './pages/VehicleFuelReport'
@@ -47,6 +50,8 @@ import JobCards from './pages/JobCards'
 import JobCardForm from './pages/JobCardForm'
 import JobCardInvoice from './pages/JobCardInvoice'
 import Invoices from './pages/Invoices'
+import Payments from './pages/Payments'
+import ProfitLoss from './pages/ProfitLoss'
 import Quotations from './pages/Quotations'
 import Accounts from './pages/Accounts'
 import Calendar from './pages/Calendar'
@@ -108,10 +113,13 @@ function AppContent() {
                 <Route path="/purchase-orders" element={<PurchaseOrders />} />
                 <Route path="/purchase-orders/new" element={<NewPurchaseOrder />} />
                 <Route path="/inventory/report" element={<InventoryReport />} />
+                <Route path="/inventory/lpg" element={<LpgInventory />} />
+                <Route path="/inventory/lpg/:stationId" element={<StationLpgLedger />} />
                 <Route path="/sales/post" element={<PostSale />} />
                 <Route path="/sales/report" element={<SalesReport />} />
                 <Route path="/sales/report/summary" element={<SalesSummaryReport />} />
                 <Route path="/sales/report/summary/:stationId" element={<StationSalesDetail />} />
+                <Route path="/sales/report/summary/:stationId/day/:date" element={<StationDaySales />} />
                 <Route path="/sales/report/summary/:stationId/variance-report" element={<StationVarianceReport />} />
                 <Route path="/sales/report/weekly" element={<WeeklySalesReport />} />
                 <Route path="/sales/report/fuel" element={<VehicleFuelReport />} />
@@ -144,6 +152,8 @@ function AppContent() {
                 <Route path="/job-cards/:id" element={<JobCardForm />} />
                 <Route path="/job-cards/:id/invoice" element={<JobCardInvoice />} />
                 <Route path="/invoices" element={<Invoices />} />
+                <Route path="/payments" element={<Payments />} />
+                <Route path="/accounts/profit-loss" element={<ProfitLoss />} />
                 <Route path="/quotations" element={<Quotations />} />
                 <Route path="/accounts" element={<Accounts />} />
                 <Route path="/stores" element={<Stores />} />

@@ -22,7 +22,11 @@ function jobCardFinancials(jc: JobCard) {
   const items = jc.items || []
   const subtotal = items.reduce((sum, i) => sum + Number(i.amount || 0), 0)
   const taxable = items.filter(i => i.taxable !== 0).reduce((sum, i) => sum + Number(i.amount || 0), 0)
-  const vat = jc.vat_enabled ? taxable * (Number(jc.vat_rate) / 100) : 0
+  // The rate is the switch: the form writes 0 for exempt/zero-rated and 16 otherwise.
+  // vat_enabled defaults to 0 on records not created through the form, so keying off
+  // it here made totals read tax-exclusive while the job card itself showed VAT.
+  const vatRate = Number(jc.vat_rate || 0)
+  const vat = vatRate > 0 ? taxable * (vatRate / 100) : 0
   const discount = Number(jc.discount || 0)
   const total = subtotal + vat - discount + Number(jc.other_charges || 0)
 
@@ -36,6 +40,15 @@ function jobCardFinancials(jc: JobCard) {
   const balanceDue = total - amountPaid
 
   return { total, profit, amountPaid, balanceDue }
+}
+
+// "Partially paid" isn't a stored status — it's what an unpaid job card with some
+// money against it actually is, so derive it rather than adding a DB enum value.
+function statusBadge(jc: JobCard, fin: ReturnType<typeof jobCardFinancials>) {
+  if (jc.status === 'not_paid' && fin.amountPaid > 0 && fin.balanceDue > 0) {
+    return { label: 'Partially Paid', style: 'bg-amber-100 text-amber-700' }
+  }
+  return { label: STATUS_LABELS[jc.status], style: STATUS_STYLES[jc.status] }
 }
 
 const PAGE_SIZE = 15
@@ -234,8 +247,8 @@ const JobCards: React.FC = () => {
                         : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-4 py-1.5">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap ${STATUS_STYLES[jc.status]}`}>
-                        {STATUS_LABELS[jc.status]}
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap ${statusBadge(jc, fin).style}`}>
+                        {statusBadge(jc, fin).label}
                       </span>
                     </td>
                     <td className="px-4 py-1.5 text-xs font-semibold text-gray-900 whitespace-nowrap">

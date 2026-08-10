@@ -453,7 +453,7 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({ defaultDate, 
   const [location, setLocation] = useState(appointment?.location || '')
   const [description, setDescription] = useState(appointment?.description || '')
   const [date, setDate] = useState(appointment ? toDateInput(appointment.appointment_date) : (defaultDate || new Date().toISOString().slice(0, 10)))
-  const [startTime, setStartTime] = useState(appointment ? toTimeInput(appointment.appointment_date) : '09:00')
+  const [startTime, setStartTime] = useState(appointment ? toTimeInput(appointment.appointment_date) : '')
   const [endTime, setEndTime] = useState(appointment?.end_date ? toTimeInput(appointment.end_date) : '')
   const [clientId, setClientId] = useState(appointment?.conversion_client_id ? String(appointment.conversion_client_id) : '')
   const [vehicleId, setVehicleId] = useState(appointment?.conversion_vehicle_id ? String(appointment.conversion_vehicle_id) : '')
@@ -562,10 +562,10 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({ defaultDate, 
                 </div>
               </div>
               <div>
-                <label className={lbl}>End Time</label>
+                <label className={lbl}>End Time *</label>
                 <div className="relative">
                   <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  <input type="time" className={inp + ' pl-10'} value={endTime} onChange={e => setEndTime(e.target.value)} />
+                  <input type="time" className={inp + ' pl-10'} value={endTime} onChange={e => setEndTime(e.target.value)} required />
                 </div>
               </div>
             </div>
