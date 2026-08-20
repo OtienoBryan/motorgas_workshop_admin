@@ -101,6 +101,7 @@ export const buildClientPayload = (clientData: Partial<Client>) => ({
   surname: clientData.category === 'individual' ? (clientData.surname || undefined) : undefined,
   email: clientData.email || undefined,
   contact: clientData.contact || '', category: clientData.category || 'individual',
+  account_number: clientData.accountNumber?.trim() || undefined,
   organization_type: clientData.organizationType || undefined,
   organization_name: clientData.organizationType ? (clientData.organizationName || undefined) : undefined,
   tax_pin: clientData.taxPin || '', address: clientData.address || '',

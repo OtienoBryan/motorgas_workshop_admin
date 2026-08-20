@@ -24,7 +24,7 @@ import {
 import { Client, REFERRAL_SOURCES, Toggle, mapConversionClient, buildClientPayload } from './Clients'
 
 const emptyForm: Partial<Client> = {
-  name: '', firstName: '', middleName: '', surname: '', email: '', contact: '', address: '', notes: '', region: '', category: 'individual', taxPin: '',
+  name: '', firstName: '', middleName: '', surname: '', email: '', contact: '', address: '', notes: '', region: '', category: 'individual', taxPin: '', accountNumber: '',
   organizationType: undefined, organizationName: '',
   referralSource: '', referralNotes: '',
   taxExempt: false, applyDiscount: false, discountRate: '',
@@ -83,7 +83,7 @@ const ClientForm: React.FC = () => {
           surname: client.surname || legacy?.last || '',
           email: client.email || '', contact: client.contact,
           address: client.address || '', notes: client.notes || '', region: client.region,
-          category: client.category, taxPin: client.taxPin || '',
+          category: client.category, taxPin: client.taxPin || '', accountNumber: client.accountNumber || '',
           organizationType: client.organizationType, organizationName: client.organizationName || '',
           referralSource: client.referralSource || '', referralNotes: client.referralNotes || '',
           taxExempt: !!client.taxExempt, applyDiscount: !!client.applyDiscount, discountRate: client.discountRate || '',
@@ -295,6 +295,15 @@ const ClientForm: React.FC = () => {
                     <input type="text" name="taxPin" value={formData.taxPin || ''}
                       onChange={e => setFormData(p => ({ ...p, taxPin: e.target.value }))}
                       className={inp} placeholder="A000000000X" />
+                  </div>
+                </div>
+                <div>
+                  <label className={lbl}>Account Number <span className="text-gray-400 font-normal">(optional — auto-generated if blank)</span></label>
+                  <div className={iconWrap}>
+                    <Hash className={fieldIcon} />
+                    <input type="text" name="accountNumber" value={formData.accountNumber || ''}
+                      onChange={e => setFormData(p => ({ ...p, accountNumber: e.target.value }))}
+                      className={inp} placeholder="e.g. MT-0001" />
                   </div>
                 </div>
                 <div>

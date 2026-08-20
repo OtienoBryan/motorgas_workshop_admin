@@ -323,6 +323,19 @@ export interface Station {
   lpgQuantity?: number
 }
 
+export interface StationExpense {
+  id: number
+  user_id: number
+  user?: Staff
+  station_id: number
+  station?: Station
+  amount: number
+  expense_date: string
+  comment: string
+  payment_method: string
+  created_at: string
+}
+
 export interface StationTank {
   id: number
   station_id: number
@@ -1232,6 +1245,7 @@ export interface Staff {
   password: string
   department: string
   department_id: number
+  station_id?: number | null
   business_email: string
   department_email: string
   salary: number
@@ -2334,6 +2348,45 @@ class AdminApiService {
   }
 
   // Stations Management
+  // Station expenses
+  async getStationExpenses(stationId?: number): Promise<StationExpense[]> {
+    if (USE_MOCK_DATA) {
+      await new Promise(resolve => setTimeout(resolve, 200))
+      return []
+    }
+    const qs = stationId ? `?stationId=${stationId}` : ''
+    try {
+      return await this.request<StationExpense[]>(`/station-expenses${qs}`)
+    } catch (error) {
+      console.error('💸 [API] getStationExpenses failed:', error)
+      return []
+    }
+  }
+
+  async createStationExpense(data: {
+    station_id: number
+    amount: number
+    expense_date: string
+    comment?: string
+    payment_method: string
+  }): Promise<StationExpense> {
+    return this.request<StationExpense>('/station-expenses', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async updateStationExpense(id: number, data: Partial<StationExpense>): Promise<StationExpense> {
+    return this.request<StationExpense>(`/station-expenses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteStationExpense(id: number): Promise<void> {
+    return this.request<void>(`/station-expenses/${id}`, { method: 'DELETE' })
+  }
+
   // Station LPG tanks
   async getStationTanks(stationId?: number): Promise<StationTank[]> {
     if (USE_MOCK_DATA) {
@@ -2631,7 +2684,7 @@ class AdminApiService {
     }
   }
 
-  async createConversionClient(clientData: Omit<ConversionClient, 'id' | 'account_number' | 'created_at' | 'updated_at'>): Promise<ConversionClient> {
+  async createConversionClient(clientData: Omit<ConversionClient, 'id' | 'account_number' | 'created_at' | 'updated_at'> & { account_number?: string }): Promise<ConversionClient> {
     if (USE_MOCK_DATA) {
       await new Promise(resolve => setTimeout(resolve, 500))
       return {

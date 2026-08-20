@@ -55,23 +55,24 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (isEditing && employee) {
-        // Parse station ID from designation
-        let stationId: number | undefined = undefined
-        if (employee.designation) {
+        let stationId: number | undefined = employee.station_id ?? undefined
+
+        // Fall back to the legacy encoding (station ID stored in designation) for
+        // employees saved before the station_id column was wired up
+        if (stationId === undefined && employee.designation) {
           try {
             const parsed = JSON.parse(employee.designation)
             if (Array.isArray(parsed) && parsed.length > 0) {
-              stationId = parsed[0] // Get first station ID
+              stationId = parsed[0]
             } else if (typeof parsed === 'number') {
               stationId = parsed
             }
           } catch {
-            // If not JSON, try to parse as comma-separated or single number
             const stationIds = employee.designation.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
             stationId = stationIds.length > 0 ? stationIds[0] : undefined
           }
         }
-        
+
         setFormData({
           name: employee.name || '',
           phone_number: employee.phone_number || '',
@@ -109,10 +110,8 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
         empl_no: formData.empl_no,
         id_no: formData.id_no,
         role: formData.role || 'attendant',
-        // Store station ID as JSON in designation field (temporary solution)
-        designation: formData.stationId !== undefined 
-          ? JSON.stringify([formData.stationId]) 
-          : null,
+        station_id: formData.stationId !== undefined ? formData.stationId : null,
+        designation: employee?.designation || null,
         // Store start date in department field (temporary solution until backend supports start_date)
         // Format: "YYYY-MM-DD" as prefix, can add more info later if needed
         department: formData.startDate || null,
@@ -445,16 +444,18 @@ const Employees: React.FC = () => {
   }
 
   const getStationId = (employee: Staff): number | null => {
+    if (employee.station_id) return employee.station_id
+
+    // Fall back to the legacy encoding (station ID stored in designation) for
+    // employees saved before the station_id column was wired up
     if (!employee.designation) return null
     try {
       const stationIds = JSON.parse(employee.designation)
-      // Handle both array (for backward compatibility) and single number
       const stationId = Array.isArray(stationIds) ? stationIds[0] : stationIds
       if (stationId && typeof stationId === 'number') {
         return stationId
       }
     } catch {
-      // Try comma-separated or single number
       const stationIds = employee.designation.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
       if (stationIds.length > 0) {
         return stationIds[0]

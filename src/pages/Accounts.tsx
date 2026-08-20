@@ -12,6 +12,7 @@ import {
   Fuel,
   Receipt,
   TrendingUp,
+  Wallet,
 } from 'lucide-react'
 
 interface AccountCard {
@@ -42,6 +43,15 @@ const CARDS: AccountCard[] = [
     route: '/quotations',
     description: 'Review open, sent, and approved quotations awaiting conversion into invoices.',
     features: ['Quotation status tracking', 'Total quoted value', 'Client and plate search', 'One-click convert to invoice'],
+  },
+  {
+    slug: 'station-expenses',
+    name: 'Station Expenses',
+    icon: Wallet,
+    gradient: 'from-red-500 to-red-600',
+    route: '/station-expenses',
+    description: 'Record and review day-to-day expenses incurred at each station, with running totals per period.',
+    features: ['Per-station filtering', 'Date range and search', 'Payment method breakdown', 'CSV export'],
   },
   {
     slug: 'profit-loss',

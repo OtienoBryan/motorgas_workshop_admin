@@ -113,7 +113,7 @@ const Dashboard: React.FC = () => {
     { name: 'Notice Board', icon: Bell, route: '/notices', color: 'text-blue-700', bgColor: 'bg-blue-500', badge: undefined },
     { name: 'OBD Scanner', icon: Activity, route: '/dashboard', color: 'text-orange-700', bgColor: 'bg-orange-500', badge: undefined, disabled: true },
     { name: 'Labor Guides', icon: FileText, route: '/notices', color: 'text-purple-700', bgColor: 'bg-purple-500', badge: undefined },
-    { name: 'HR', icon: Clock, route: '/staff', color: 'text-red-700', bgColor: 'bg-red-500', badge: undefined },
+    { name: 'HR', icon: Clock, route: '/employees', color: 'text-red-700', bgColor: 'bg-red-500', badge: undefined },
     { name: 'Attendance', icon: MapPin, route: '/attendance', color: 'text-cyan-700', bgColor: 'bg-cyan-500', badge: undefined },
     { name: 'Working Days', icon: CalendarCheck, route: '/working-days', color: 'text-lime-700', bgColor: 'bg-lime-500', badge: undefined },
     { name: 'Financing', icon: PieChart, route: '/sales/report', color: 'text-purple-700', bgColor: 'bg-purple-500', badge: undefined, disabled: true },

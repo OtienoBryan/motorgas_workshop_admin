@@ -36,6 +36,7 @@ import Inventory from './pages/Inventory'
 import InventoryReport from './pages/InventoryReport'
 import LpgInventory from './pages/LpgInventory'
 import StationLpgLedger from './pages/StationLpgLedger'
+import StationExpenses from './pages/StationExpenses'
 import PostSale from './pages/PostSale'
 import KeyAccountLedgerReport from './pages/KeyAccountLedgerReport'
 import SalesReport from './pages/SalesReport'
@@ -115,6 +116,7 @@ function AppContent() {
                 <Route path="/inventory/report" element={<InventoryReport />} />
                 <Route path="/inventory/lpg" element={<LpgInventory />} />
                 <Route path="/inventory/lpg/:stationId" element={<StationLpgLedger />} />
+                <Route path="/station-expenses" element={<StationExpenses />} />
                 <Route path="/sales/post" element={<PostSale />} />
                 <Route path="/sales/report" element={<SalesReport />} />
                 <Route path="/sales/report/summary" element={<SalesSummaryReport />} />

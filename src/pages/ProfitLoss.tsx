@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminApiService, JobCard, PurchaseOrder } from '../services/api'
+import { adminApiService, JobCard, PurchaseOrder, StationExpense, Sale } from '../services/api'
 import { ESTIMATE_STAGE_STATUSES } from './JobCardForm'
 import { COMPANY } from '../components/JobCardInvoiceDocument'
 import { exportElementToPdf } from '../utils/pdf'
@@ -59,10 +59,18 @@ const DETAIL_SPECS = {
   },
 } as const
 
-type DetailKey = keyof typeof DETAIL_SPECS
+/** LPG sales and operating expenses come from other sources, so they drill down separately. */
+type DetailKey = keyof typeof DETAIL_SPECS | 'expenses' | 'lpg'
 
 /** One period's figures. Pulled out of the component so it can run twice for comparisons. */
-function computeReport(jobCards: JobCard[], purchaseOrders: PurchaseOrder[], fromDate: string, toDate: string) {
+function computeReport(
+  jobCards: JobCard[],
+  purchaseOrders: PurchaseOrder[],
+  expenses: StationExpense[],
+  sales: Sale[],
+  fromDate: string,
+  toDate: string
+) {
   const from = new Date(`${fromDate}T00:00:00`)
   const to = new Date(`${toDate}T23:59:59`)
   const inRange = (value?: string | null) => {
@@ -99,11 +107,19 @@ function computeReport(jobCards: JobCard[], purchaseOrders: PurchaseOrder[], fro
     otherCharges += Number(jc.other_charges || 0)
   }
 
+  // LPG sold at the stations — its own revenue stream, dated by saleDate.
+  const periodSales = sales.filter(s => inRange(s.saleDate))
+  const lpgSales = periodSales.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0)
+  const lpgVolume = periodSales.reduce((sum, s) => sum + Number(s.quantity || 0), 0)
+
   // VAT is collected on behalf of KRA, so it is deliberately excluded from income.
-  const totalIncome = partsSales + laborSales + otherCharges - discounts
+  const totalIncome = partsSales + laborSales + lpgSales + otherCharges - discounts
   const totalCogs = partsCogs
   const grossProfit = totalIncome - totalCogs
-  const operatingExpenses = 0
+
+  // Station expenses are dated by expense_date, not when they were keyed in.
+  const periodExpenses = expenses.filter(e => inRange(String(e.expense_date).slice(0, 10)))
+  const operatingExpenses = periodExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
   const netProfit = grossProfit - operatingExpenses
 
   const purchasesInPeriod = purchaseOrders
@@ -113,6 +129,9 @@ function computeReport(jobCards: JobCard[], purchaseOrders: PurchaseOrder[], fro
   return {
     invoices,
     invoiceCount: invoices.length,
+    periodExpenses,
+    periodSales,
+    lpgSales, lpgVolume,
     partsSales, laborSales, otherCharges, discounts,
     totalIncome, partsCogs, totalCogs, grossProfit,
     operatingExpenses, netProfit, purchasesInPeriod,
@@ -141,6 +160,8 @@ const ProfitLoss: React.FC = () => {
   const navigate = useNavigate()
   const [jobCards, setJobCards] = useState<JobCard[]>([])
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([])
+  const [expenses, setExpenses] = useState<StationExpense[]>([])
+  const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [exportingDetail, setExportingDetail] = useState(false)
@@ -156,22 +177,26 @@ const ProfitLoss: React.FC = () => {
     Promise.all([
       adminApiService.getJobCards().catch((): JobCard[] => []),
       adminApiService.getPurchaseOrders().catch((): PurchaseOrder[] => []),
+      adminApiService.getStationExpenses().catch((): StationExpense[] => []),
+      adminApiService.getSales().catch((): Sale[] => []),
     ])
-      .then(([jc, po]) => {
+      .then(([jc, po, ex, sl]) => {
         setJobCards(Array.isArray(jc) ? jc : [])
         setPurchaseOrders(Array.isArray(po) ? po : [])
+        setExpenses(Array.isArray(ex) ? ex : [])
+        setSales(Array.isArray(sl) ? sl : [])
       })
       .finally(() => setLoading(false))
   }, [])
 
   const report = useMemo(
-    () => computeReport(jobCards, purchaseOrders, fromDate, toDate),
-    [jobCards, purchaseOrders, fromDate, toDate]
+    () => computeReport(jobCards, purchaseOrders, expenses, sales, fromDate, toDate),
+    [jobCards, purchaseOrders, expenses, sales, fromDate, toDate]
   )
 
   const comparison = useMemo(
-    () => (compareOn ? computeReport(jobCards, purchaseOrders, cmpFromDate, cmpToDate) : null),
-    [compareOn, jobCards, purchaseOrders, cmpFromDate, cmpToDate]
+    () => (compareOn ? computeReport(jobCards, purchaseOrders, expenses, sales, cmpFromDate, cmpToDate) : null),
+    [compareOn, jobCards, purchaseOrders, expenses, sales, cmpFromDate, cmpToDate]
   )
 
   // Which line the user drilled into, if any.
@@ -179,6 +204,49 @@ const ProfitLoss: React.FC = () => {
 
   const detail = useMemo(() => {
     if (!detailKey) return null
+
+    if (detailKey === 'lpg') {
+      const rows = report.periodSales
+        .map(s => ({
+          date: s.saleDate,
+          reference: `Sale #${s.id}`,
+          type: 'Sale',
+          category: 'LPG Sales',
+          amount: Number(s.totalAmount || 0),
+          note: [
+            s.station?.name?.trim(),
+            s.conversionClient?.name || s.keyAccount?.name,
+            `${Number(s.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} L`,
+          ].filter(Boolean).join(' - '),
+        }))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      return {
+        title: 'Income Detail — Sales (LPG)',
+        rows,
+        total: rows.reduce((sum, r) => sum + r.amount, 0),
+      }
+    }
+
+    if (detailKey === 'expenses') {
+      const rows = report.periodExpenses
+        .map(e => ({
+          date: String(e.expense_date).slice(0, 10),
+          reference: `Expense #${e.id}`,
+          type: 'Expense',
+          category: e.payment_method || 'Expense',
+          amount: Number(e.amount || 0),
+          note: [e.station?.name?.trim(), e.comment].filter(Boolean).join(' - '),
+        }))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      return {
+        title: 'Operating Expenses Detail — Station Expenses',
+        rows,
+        total: rows.reduce((sum, r) => sum + r.amount, 0),
+      }
+    }
+
     const spec = DETAIL_SPECS[detailKey]
 
     const rows = report.invoices
@@ -198,7 +266,7 @@ const ProfitLoss: React.FC = () => {
       rows,
       total: rows.reduce((sum, r) => sum + r.amount, 0),
     }
-  }, [detailKey, report.invoices])
+  }, [detailKey, report.invoices, report.periodExpenses, report.periodSales])
 
   const handleExportDetailPdf = async () => {
     const target = detailRef.current
@@ -447,6 +515,12 @@ const ProfitLoss: React.FC = () => {
                 <p className="text-[11px] font-bold text-gray-700">Invoices in Period</p>
                 <p className="text-[11px] font-bold text-gray-700">{report.invoiceCount}</p>
               </div>
+              <div>
+                <p className="text-[11px] font-bold text-gray-700">LPG Volume Sold</p>
+                <p className="text-[11px] font-bold text-gray-700">
+                  {report.lpgVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })} L
+                </p>
+              </div>
             </div>
           </div>
 
@@ -474,6 +548,7 @@ const ProfitLoss: React.FC = () => {
             </thead>
             <tbody>
               {sectionRow('Income')}
+              {lineRow('Sales (LPG)', report.lpgSales, r => r.lpgSales, 'lpg')}
               {lineRow('Sales (Parts)', report.partsSales, r => r.partsSales, 'parts')}
               {lineRow('Sales (Labor/Services)', report.laborSales, r => r.laborSales, 'labor')}
               {report.otherCharges > 0 && lineRow('Other Charges', report.otherCharges, r => r.otherCharges, 'other')}
@@ -486,6 +561,7 @@ const ProfitLoss: React.FC = () => {
               {totalRow('Gross Profit', report.grossProfit, r => r.grossProfit)}
 
               {sectionRow('Operating Expenses')}
+              {lineRow('Station Expenses', report.operatingExpenses, r => r.operatingExpenses, 'expenses')}
               {totalRow('Total Operating Expenses', report.operatingExpenses, r => r.operatingExpenses)}
 
               {totalRow('Net Profit', report.netProfit, r => r.netProfit, true)}
@@ -577,6 +653,7 @@ const ProfitLoss: React.FC = () => {
             <p className="text-[10px] text-gray-400">
               Accrual basis — revenue is recognised on the invoice date, not when payment is received.
               VAT is excluded from income. Quotations and voided invoices are not included.
+              Operating expenses are station expenses dated within the period.
             </p>
           </div>
         </div>
