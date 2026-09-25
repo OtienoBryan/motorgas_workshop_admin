@@ -157,11 +157,11 @@ const JobCardInvoiceDocument: React.FC<JobCardInvoiceDocumentProps> = ({ jobCard
               <span>Labor</span><span>{money(fin.laborSubtotal)}</span>
             </div>
             <div className="flex items-center justify-between text-xs text-gray-500 pt-1.5 border-t border-gray-100">
-              <span>Subtotal (Exclusive)</span><span>{money(fin.subtotal)}</span>
+              <span>Subtotal</span><span>{money(fin.subtotal)}</span>
             </div>
             {jobCard.vat_enabled ? (
               <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>VAT ({jobCard.vat_rate}%, Exclusive)</span><span>{money(fin.vatAmount)}</span>
+                <span>VAT ({jobCard.vat_rate}%)</span><span>{money(fin.vatAmount)}</span>
               </div>
             ) : null}
             {fin.discount > 0 && (
