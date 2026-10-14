@@ -487,19 +487,6 @@ const SalesReport: React.FC = () => {
                 </>
               )}
 
-              <div className="w-40">
-                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Shift</label>
-                <select
-                  value={shift}
-                  onChange={(e) => setShift(e.target.value as typeof shift)}
-                  className="w-full px-1.5 py-1 text-[11px] border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                >
-                  <option value="all">All Shifts</option>
-                  <option value="shift1">Shift 1 (7am – 7pm)</option>
-                  <option value="shift2">Shift 2 (7pm – 7am)</option>
-                </select>
-              </div>
-
               <div className="w-px self-stretch bg-gray-100 hidden sm:block" />
 
               <div className="min-w-[140px] flex-1">
@@ -614,6 +601,27 @@ const SalesReport: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Shift tabs */}
+        <div className="flex gap-1 p-1 bg-gray-200 rounded-lg mb-2 w-fit">
+          {([
+            ['all', 'All Shifts'],
+            ['shift1', 'Shift 1 (7am – 7pm)'],
+            ['shift2', 'Shift 2 (7pm – 7am)'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setShift(key)}
+              className={`px-4 py-1.5 text-[11px] font-medium rounded-md transition-colors ${
+                shift === key
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-white hover:text-gray-800'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Sales Table */}
