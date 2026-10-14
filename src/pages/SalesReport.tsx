@@ -49,7 +49,7 @@ const SalesReport: React.FC = () => {
     ? Number(selectedClientFilter.slice(3))
     : null
 
-  const [datePreset, setDatePreset] = useState<'this_month' | 'last_month' | 'last_90' | 'all' | 'custom'>('this_month')
+  const [datePreset, setDatePreset] = useState<'today' | 'this_month' | 'last_month' | 'last_90' | 'all' | 'custom'>('this_month')
   const [shift, setShift] = useState<'all' | 'shift1' | 'shift2'>('all')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -60,7 +60,9 @@ const SalesReport: React.FC = () => {
     let start: Date
     let end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
 
-    if (datePreset === 'this_month') {
+    if (datePreset === 'today') {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    } else if (datePreset === 'this_month') {
       start = new Date(now.getFullYear(), now.getMonth(), 1)
     } else if (datePreset === 'last_month') {
       start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -341,7 +343,8 @@ const SalesReport: React.FC = () => {
       sale.clientType.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesDateRange = !dateRange || (() => {
-      const d = new Date(sale.saleDate)
+      // A "day" runs 7am → 7am, so shift the sale back 7h to find the day it belongs to
+      const d = new Date(new Date(sale.saleDate).getTime() - 7 * 60 * 60 * 1000)
       return d >= dateRange.start && d <= dateRange.end
     })()
 
@@ -455,6 +458,7 @@ const SalesReport: React.FC = () => {
                     onChange={(e) => setDatePreset(e.target.value as typeof datePreset)}
                     className="w-full pl-5 pr-1.5 py-1 text-[11px] border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
                   >
+                    <option value="today">Today</option>
                     <option value="this_month">This Month</option>
                     <option value="last_month">Last Month</option>
                     <option value="last_90">Last 90 Days</option>
@@ -606,7 +610,7 @@ const SalesReport: React.FC = () => {
         {/* Shift tabs */}
         <div className="flex gap-1 p-1 bg-gray-200 rounded-lg mb-2 w-fit">
           {([
-            ['all', 'All Shifts'],
+            ['all', 'All Day (7am – 7am)'],
             ['shift1', 'Shift 1 (7am – 7pm)'],
             ['shift2', 'Shift 2 (7pm – 7am)'],
           ] as const).map(([key, label]) => (
