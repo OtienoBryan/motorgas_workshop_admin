@@ -251,10 +251,10 @@ const WeeklySalesReport: React.FC = () => {
   // Sticky left column offsets (px) — No. | Reg No | Org/Sacco | Driver/Owner | Tel
   const stickyCols = [
     { label: 'No.', width: 36, left: 0 },
-    { label: 'Reg No', width: 88, left: 36 },
-    { label: 'Org/Sacco', width: 100, left: 124 },
-    { label: 'Driver/Owner', width: 128, left: 224 },
-    { label: 'Tel', width: 120, left: 352 },
+    { label: 'Reg No', width: 96, left: 36 },
+    { label: 'Org/Sacco', width: 120, left: 132 },
+    { label: 'Driver/Owner', width: 140, left: 252 },
+    { label: 'Tel', width: 132, left: 392 },
   ]
   // Thick divider after Tel mimics the sheet's frozen-pane line
   const freezeDivider: React.CSSProperties = { borderRight: '2px solid #374151' }
@@ -468,16 +468,16 @@ const WeeklySalesReport: React.FC = () => {
                       <td className="border border-gray-300 bg-white text-center px-1 py-0.5" style={stickyStyle(0)}>
                         {idx + 1}
                       </td>
-                      <td className="border border-gray-300 bg-white font-medium px-1 py-0.5 whitespace-nowrap" style={stickyStyle(1)}>
+                      <td className="border border-gray-300 bg-white font-medium px-1 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis" title={vehicle.regNo} style={stickyStyle(1)}>
                         {vehicle.regNo}
                       </td>
-                      <td className="border border-gray-300 bg-white px-1 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis text-center" style={stickyStyle(2)}>
+                      <td className="border border-gray-300 bg-white px-1 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis text-center" title={vehicle.org || undefined} style={stickyStyle(2)}>
                         {vehicle.org || '-'}
                       </td>
-                      <td className="border border-gray-300 bg-white px-1 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis text-center" style={stickyStyle(3)}>
+                      <td className="border border-gray-300 bg-white px-1 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis text-center" title={vehicle.driver || undefined} style={stickyStyle(3)}>
                         {vehicle.driver || '-'}
                       </td>
-                      <td className="border border-gray-300 bg-white px-1 py-0.5 whitespace-nowrap text-center" style={stickyStyle(4)}>
+                      <td className="border border-gray-300 bg-white px-1 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis text-center" title={vehicle.tel || undefined} style={stickyStyle(4)}>
                         {vehicle.tel || '-'}
                       </td>
                       {months.map((m) => (

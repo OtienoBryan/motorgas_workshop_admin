@@ -43,6 +43,7 @@ export interface Client {
   partsMarkup?: string
   paymentTermsOverride?: boolean
   paymentTerms?: string
+  vehicleCount?: number
 }
 
 export const REFERRAL_SOURCES = [
@@ -92,6 +93,7 @@ export const mapConversionClient = (c: ConversionClient): Client => ({
   labourRateOverride: !!c.labour_rate_override, labourRate: c.labour_rate?.toString() || undefined,
   partsMarkupOverride: !!c.parts_markup_override, partsMarkup: c.parts_markup?.toString() || undefined,
   paymentTermsOverride: !!c.payment_terms_override, paymentTerms: c.payment_terms || undefined,
+  vehicleCount: c.vehicle_count ?? 0,
 })
 
 export const buildClientPayload = (clientData: Partial<Client>) => ({
@@ -255,13 +257,11 @@ const Clients: React.FC = () => {
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Name</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Hub</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Account No.</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Organization Type</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Organization Name</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Email</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Region</th>
-                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Tax PIN</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Vehicles</th>
                   <th className="px-4 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
@@ -275,6 +275,15 @@ const Clients: React.FC = () => {
                       {/* Name */}
                       <td className="px-4 py-1.5">
                         <span className="text-xs font-semibold text-gray-900 whitespace-nowrap">{client.name}</span>
+                      </td>
+
+                      {/* Hub */}
+                      <td className="px-4 py-1.5">
+                        {client.region
+                          ? <div className="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap">
+                              <MapPin className="h-3 w-3 text-gray-400 shrink-0" />{client.region}
+                            </div>
+                          : <span className="text-xs text-gray-300">—</span>}
                       </td>
 
                       {/* Account Number */}
@@ -299,29 +308,8 @@ const Clients: React.FC = () => {
                         {client.organizationName || <span className="text-gray-300">—</span>}
                       </td>
 
-                      {/* Contact */}
-                      <td className="px-4 py-1.5 text-xs text-gray-700 whitespace-nowrap">{client.contact}</td>
-
-                      {/* Email */}
-                      <td className="px-4 py-1.5 text-xs text-gray-500 whitespace-nowrap">
-                        {client.email || <span className="text-gray-300">—</span>}
-                      </td>
-
-                      {/* Region */}
-                      <td className="px-4 py-1.5">
-                        {client.region
-                          ? <div className="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap">
-                              <MapPin className="h-3 w-3 text-gray-400 shrink-0" />{client.region}
-                            </div>
-                          : <span className="text-xs text-gray-300">—</span>}
-                      </td>
-
-                      {/* Tax PIN */}
-                      <td className="px-4 py-1.5">
-                        {client.taxPin
-                          ? <span className="text-xs font-mono text-gray-600">{client.taxPin}</span>
-                          : <span className="text-xs text-gray-300">—</span>}
-                      </td>
+                      {/* Vehicles */}
+                      <td className="px-4 py-1.5 text-xs text-gray-700">{client.vehicleCount ?? 0}</td>
 
                       {/* Actions */}
                       <td className="px-4 py-1.5 text-right" onClick={e => e.stopPropagation()}>

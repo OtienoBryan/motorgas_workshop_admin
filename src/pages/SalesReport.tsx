@@ -49,7 +49,8 @@ const SalesReport: React.FC = () => {
     ? Number(selectedClientFilter.slice(3))
     : null
 
-  const [datePreset, setDatePreset] = useState<'this_month' | 'last_month' | 'last_30' | 'last_90' | 'all' | 'custom'>('this_month')
+  const [datePreset, setDatePreset] = useState<'this_month' | 'last_month' | 'last_90' | 'all' | 'custom'>('this_month')
+  const [shift, setShift] = useState<'all' | 'shift1' | 'shift2'>('all')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
 
@@ -64,9 +65,6 @@ const SalesReport: React.FC = () => {
     } else if (datePreset === 'last_month') {
       start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
-    } else if (datePreset === 'last_30') {
-      start = new Date(now)
-      start.setDate(start.getDate() - 29)
     } else if (datePreset === 'last_90') {
       start = new Date(now)
       start.setDate(start.getDate() - 89)
@@ -347,13 +345,21 @@ const SalesReport: React.FC = () => {
       return d >= dateRange.start && d <= dateRange.end
     })()
 
-    return matchesSearch && matchesDateRange
+    // Shift 1: 07:00–18:59, Shift 2: 19:00–06:59 (spans midnight)
+    const matchesShift = shift === 'all' || (() => {
+      const h = new Date(sale.saleDate).getHours()
+      const isDay = h >= 7 && h < 19
+      return shift === 'shift1' ? isDay : !isDay
+    })()
+
+    return matchesSearch && matchesDateRange && matchesShift
   })
 
-  const hasActiveFilters = datePreset !== 'this_month' || selectedStationId !== null || selectedClientFilter !== '' || searchTerm !== ''
+  const hasActiveFilters = datePreset !== 'this_month' || shift !== 'all' || selectedStationId !== null || selectedClientFilter !== '' || searchTerm !== ''
 
   const clearFilters = () => {
     setDatePreset('this_month')
+    setShift('all')
     setCustomStart('')
     setCustomEnd('')
     setSelectedStationId(null)
@@ -451,7 +457,6 @@ const SalesReport: React.FC = () => {
                   >
                     <option value="this_month">This Month</option>
                     <option value="last_month">Last Month</option>
-                    <option value="last_30">Last 30 Days</option>
                     <option value="last_90">Last 90 Days</option>
                     <option value="all">All Time</option>
                     <option value="custom">Custom Range</option>
@@ -481,6 +486,19 @@ const SalesReport: React.FC = () => {
                   </div>
                 </>
               )}
+
+              <div className="w-40">
+                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Shift</label>
+                <select
+                  value={shift}
+                  onChange={(e) => setShift(e.target.value as typeof shift)}
+                  className="w-full px-1.5 py-1 text-[11px] border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                >
+                  <option value="all">All Shifts</option>
+                  <option value="shift1">Shift 1 (7am – 7pm)</option>
+                  <option value="shift2">Shift 2 (7pm – 7am)</option>
+                </select>
+              </div>
 
               <div className="w-px self-stretch bg-gray-100 hidden sm:block" />
 

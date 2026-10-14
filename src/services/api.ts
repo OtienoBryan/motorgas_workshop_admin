@@ -460,6 +460,7 @@ export interface KeyAccount {
 export interface ConversionClient {
   id: number
   name: string
+  vehicle_count?: number
   first_name?: string | null
   middle_name?: string | null
   surname?: string | null
