@@ -21,7 +21,8 @@ import {
   CalendarClock,
   ShieldOff,
 } from 'lucide-react'
-import { Client, REFERRAL_SOURCES, Toggle, mapConversionClient, buildClientPayload } from './Clients'
+import { COUNTRY_DIAL_CODES, DEFAULT_COUNTRY_ISO, countryFlag, splitPhone, joinPhone } from '../utils/countryCodes'
+import { Client, RelationshipStatus, RELATIONSHIP_STATUS_LABELS, REFERRAL_SOURCES, Toggle, mapConversionClient, buildClientPayload } from './Clients'
 
 const emptyForm: Partial<Client> = {
   name: '', firstName: '', middleName: '', surname: '', email: '', contact: '', address: '', notes: '', region: '', category: 'individual', taxPin: '', accountNumber: '',
@@ -63,6 +64,7 @@ const ClientForm: React.FC = () => {
   const [formData, setFormData] = useState<Partial<Client>>(emptyForm)
   const [loading, setLoading] = useState(isEditing)
   const [saving, setSaving] = useState(false)
+  const [countryIso, setCountryIso] = useState(DEFAULT_COUNTRY_ISO)
 
   useEffect(() => {
     if (!isEditing) { setFormData(emptyForm); return }
@@ -76,12 +78,15 @@ const ClientForm: React.FC = () => {
         const legacy = client.category === 'individual' && !client.firstName && !client.surname
           ? splitLegacyName(client.name)
           : null
+        const phone = splitPhone(client.contact)
+        setCountryIso(phone.iso)
         setFormData({
           name: client.name,
           firstName: client.firstName || legacy?.first || '',
           middleName: client.middleName || legacy?.middle || '',
           surname: client.surname || legacy?.last || '',
-          email: client.email || '', contact: client.contact,
+          relationshipStatus: client.relationshipStatus,
+          email: client.email || '', contact: phone.number,
           address: client.address || '', notes: client.notes || '', region: client.region,
           category: client.category, taxPin: client.taxPin || '', accountNumber: client.accountNumber || '',
           organizationType: client.organizationType, organizationName: client.organizationName || '',
@@ -105,7 +110,7 @@ const ClientForm: React.FC = () => {
       const composedName = formData.category === 'company'
         ? (formData.name || '').trim()
         : [formData.firstName, formData.middleName, formData.surname].filter(Boolean).join(' ').trim()
-      const payload = buildClientPayload({ ...formData, name: composedName })
+      const payload = buildClientPayload({ ...formData, name: composedName, contact: joinPhone(countryIso, formData.contact || '') })
       if (isEditing) {
         await adminApiService.updateConversionClient(Number(clientId), payload)
       } else {
@@ -271,11 +276,20 @@ const ClientForm: React.FC = () => {
 
                 <div>
                   <label className={lbl}>Contact *</label>
-                  <div className={iconWrap}>
-                    <Phone className={fieldIcon} />
-                    <input type="text" name="contact" value={formData.contact || ''} required
-                      onChange={e => setFormData(p => ({ ...p, contact: e.target.value }))}
-                      className={inp} placeholder="+254…" />
+                  <div className="flex gap-2">
+                    <select value={countryIso} onChange={e => setCountryIso(e.target.value)}
+                      className="w-36 shrink-0 px-2 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-gray-700"
+                      title={COUNTRY_DIAL_CODES.find(c => c.iso === countryIso)?.name}>
+                      {COUNTRY_DIAL_CODES.map(c => (
+                        <option key={c.iso} value={c.iso}>{countryFlag(c.iso)} {c.dial} {c.name}</option>
+                      ))}
+                    </select>
+                    <div className={iconWrap + ' flex-1'}>
+                      <Phone className={fieldIcon} />
+                      <input type="tel" name="contact" value={formData.contact || ''} required
+                        onChange={e => setFormData(p => ({ ...p, contact: e.target.value }))}
+                        className={inp} placeholder="712345678" />
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -314,6 +328,19 @@ const ClientForm: React.FC = () => {
                       onChange={e => setFormData(p => ({ ...p, region: e.target.value }))}
                       className={inp} placeholder="e.g. Nairobi" />
                   </div>
+                </div>
+                <div>
+                  <label className={lbl}>Relationship Status <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <select
+                    value={formData.relationshipStatus || ''}
+                    onChange={e => setFormData(p => ({ ...p, relationshipStatus: (e.target.value || undefined) as RelationshipStatus | undefined }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-shadow text-gray-700"
+                  >
+                    <option value="">Select status…</option>
+                    {(Object.keys(RELATIONSHIP_STATUS_LABELS) as RelationshipStatus[]).map(s => (
+                      <option key={s} value={s}>{RELATIONSHIP_STATUS_LABELS[s]}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="col-span-2">

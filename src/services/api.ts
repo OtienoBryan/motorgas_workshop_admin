@@ -464,6 +464,7 @@ export interface ConversionClient {
   first_name?: string | null
   middle_name?: string | null
   surname?: string | null
+  relationship_status?: 'single' | 'married' | 'divorced' | 'widowed' | 'other' | null
   email: string | null
   contact: string
   address: string | null
@@ -1388,6 +1389,34 @@ export interface PurchaseOrderItem {
   }
 }
 
+export type ExternalOwnershipType = 'individual' | 'company' | 'sacco'
+
+export const EXTERNAL_VEHICLE_FUEL_TYPES = ['Petrol', 'Diesel', 'LPG', 'Petrol/LPG', 'Hybrid', 'Electric'] as const
+export type ExternalVehicleFuelType = (typeof EXTERNAL_VEHICLE_FUEL_TYPES)[number]
+
+export interface ExternalVehicleOwner {
+  id: number
+  ownership_type: ExternalOwnershipType
+  name: string
+  id_number?: string | null
+  contact_person?: string | null
+  phone?: string | null
+  email?: string | null
+  address?: string | null
+  vehicle_count?: number
+}
+
+export interface ExternalVehicle {
+  id: number
+  registration_number: string
+  make: string
+  model: string
+  fuel_type: ExternalVehicleFuelType
+  location?: string | null
+  owner_id: number
+  owner?: ExternalVehicleOwner
+}
+
 class AdminApiService {
   private authToken: string | null = null
 
@@ -2291,6 +2320,31 @@ class AdminApiService {
       throw new Error('Country not found')
     }
     return this.request<Country>(`/countries/name/${name}`)
+  }
+
+  // External Vehicle Database
+  async getExternalVehicles(): Promise<ExternalVehicle[]> {
+    return this.request<ExternalVehicle[]>('/external-vehicles')
+  }
+
+  async createExternalVehicle(data: Omit<ExternalVehicle, 'id' | 'owner'>): Promise<ExternalVehicle> {
+    return this.request<ExternalVehicle>('/external-vehicles', { method: 'POST', body: JSON.stringify(data) })
+  }
+
+  async updateExternalVehicle(id: number, data: Partial<Omit<ExternalVehicle, 'id' | 'owner'>>): Promise<ExternalVehicle> {
+    return this.request<ExternalVehicle>(`/external-vehicles/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+  }
+
+  async deleteExternalVehicle(id: number): Promise<void> {
+    return this.request<void>(`/external-vehicles/${id}`, { method: 'DELETE' })
+  }
+
+  async getExternalVehicleOwners(type?: ExternalOwnershipType): Promise<ExternalVehicleOwner[]> {
+    return this.request<ExternalVehicleOwner[]>(`/external-vehicles/owners${type ? `?type=${type}` : ''}`)
+  }
+
+  async createExternalVehicleOwner(data: Omit<ExternalVehicleOwner, 'id'>): Promise<ExternalVehicleOwner> {
+    return this.request<ExternalVehicleOwner>('/external-vehicles/owners', { method: 'POST', body: JSON.stringify(data) })
   }
 
   // Regions Management

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminApiService, ConversionClient } from '../services/api'
+import { adminApiService, ConversionClient, ConversionVehicle } from '../services/api'
 import {
+  X,
   Plus,
   Search,
   Edit,
@@ -16,12 +17,19 @@ import {
   ChevronRight,
 } from 'lucide-react'
 
+export type RelationshipStatus = 'single' | 'married' | 'divorced' | 'widowed' | 'other'
+
+export const RELATIONSHIP_STATUS_LABELS: Record<RelationshipStatus, string> = {
+  single: 'Single', married: 'Married', divorced: 'Divorced', widowed: 'Widowed', other: 'Other',
+}
+
 export interface Client {
   id: number
   name: string
   firstName?: string
   middleName?: string
   surname?: string
+  relationshipStatus?: RelationshipStatus
   email?: string
   contact: string
   address?: string
@@ -83,6 +91,7 @@ export const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void
 export const mapConversionClient = (c: ConversionClient): Client => ({
   id: c.id, name: c.name,
   firstName: c.first_name || undefined, middleName: c.middle_name || undefined, surname: c.surname || undefined,
+  relationshipStatus: c.relationship_status || undefined,
   email: c.email || undefined,
   contact: c.contact, address: c.address || undefined, notes: c.description || undefined,
   region: c.region || '', category: (c.category as 'individual' | 'company') || 'individual',
@@ -101,6 +110,7 @@ export const buildClientPayload = (clientData: Partial<Client>) => ({
   first_name: clientData.category === 'individual' ? (clientData.firstName || undefined) : undefined,
   middle_name: clientData.category === 'individual' ? (clientData.middleName || undefined) : undefined,
   surname: clientData.category === 'individual' ? (clientData.surname || undefined) : undefined,
+  relationship_status: clientData.relationshipStatus || undefined,
   email: clientData.email || undefined,
   contact: clientData.contact || '', category: clientData.category || 'individual',
   account_number: clientData.accountNumber?.trim() || undefined,
@@ -135,7 +145,21 @@ const Clients: React.FC = () => {
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 15
 
+  const [vehiclesClient, setVehiclesClient] = useState<Client | null>(null)
+  const [clientVehicles, setClientVehicles] = useState<ConversionVehicle[]>([])
+  const [loadingVehicles, setLoadingVehicles] = useState(false)
+
   useEffect(() => { fetchClients() }, [])
+
+  const openVehicles = async (client: Client) => {
+    setVehiclesClient(client)
+    setClientVehicles([])
+    setLoadingVehicles(true)
+    try {
+      setClientVehicles((await adminApiService.getConversionVehiclesByClient(client.id)) || [])
+    } catch { setClientVehicles([]) }
+    finally { setLoadingVehicles(false) }
+  }
 
   const fetchClients = async () => {
     try {
@@ -163,7 +187,7 @@ const Clients: React.FC = () => {
     const matchesSearch = !q || [c.name, c.email, c.contact, c.address, c.region, c.accountNumber, c.organizationName]
       .some(v => v?.toLowerCase().includes(q))
     return matchesFilter && matchesSearch
-  })
+  }).sort((a, b) => (b.vehicleCount ?? 0) - (a.vehicleCount ?? 0))
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage   = Math.min(page, totalPages)
@@ -261,6 +285,7 @@ const Clients: React.FC = () => {
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Account No.</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Organization Type</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Organization Name</th>
+                  <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Relationship Status</th>
                   <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Vehicles</th>
                   <th className="px-4 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
                 </tr>
@@ -308,8 +333,22 @@ const Clients: React.FC = () => {
                         {client.organizationName || <span className="text-gray-300">—</span>}
                       </td>
 
+                      {/* Relationship Status */}
+                      <td className="px-4 py-1.5 text-xs text-gray-700 whitespace-nowrap">
+                        {client.relationshipStatus
+                          ? RELATIONSHIP_STATUS_LABELS[client.relationshipStatus]
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+
                       {/* Vehicles */}
-                      <td className="px-4 py-1.5 text-xs text-gray-700">{client.vehicleCount ?? 0}</td>
+                      <td className="px-4 py-1.5 text-xs text-gray-700" onClick={e => e.stopPropagation()}>
+                        {(client.vehicleCount ?? 0) > 0
+                          ? <button onClick={() => openVehicles(client)}
+                              className="font-semibold text-green-700 hover:underline">
+                              {client.vehicleCount}
+                            </button>
+                          : 0}
+                      </td>
 
                       {/* Actions */}
                       <td className="px-4 py-1.5 text-right" onClick={e => e.stopPropagation()}>
@@ -393,6 +432,52 @@ const Clients: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* ── Vehicles modal ── */}
+      {vehiclesClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setVehiclesClient(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-900">{vehiclesClient.name} — Vehicles</h2>
+              <button onClick={() => setVehiclesClient(null)}
+                className="p-1 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="overflow-auto">
+              {loadingVehicles ? (
+                <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-green-600" /></div>
+              ) : clientVehicles.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-10">No vehicles found</p>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      {['Registration', 'Make / Model', 'Year', 'Odometer'].map(h => (
+                        <th key={h} className="px-4 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {clientVehicles.map(v => (
+                      <tr key={v.id}>
+                        <td className="px-4 py-1.5 text-xs font-mono font-semibold text-gray-900 whitespace-nowrap">{v.registration_number}</td>
+                        <td className="px-4 py-1.5 text-xs text-gray-700">{[v.make, v.model].filter(Boolean).join(' ')}</td>
+                        <td className="px-4 py-1.5 text-xs text-gray-700">{v.year || '—'}</td>
+                        <td className="px-4 py-1.5 text-xs text-gray-700 whitespace-nowrap">
+                          {v.current_odo != null ? `${v.current_odo} ${v.odo_unit}` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Floating add button ── */}
       <button

@@ -25,6 +25,9 @@ import InspectionDetails from './pages/InspectionDetails'
 import InspectionForm from './pages/InspectionForm'
 import ChecklistTemplates from './pages/ChecklistTemplates'
 import Vehicles from './pages/Vehicles'
+import ExternalVehicles from './pages/ExternalVehicles'
+import ExternalVehicleOwners from './pages/ExternalVehicleOwners'
+import ExternalVehicleOwnerDetails from './pages/ExternalVehicleOwnerDetails'
 import Parts from './pages/Parts'
 import Services from './pages/Services'
 import Stores from './pages/Stores'
@@ -147,6 +150,9 @@ function AppContent() {
                 <Route path="/clients/:clientId/vehicles/:vehicleId/inspections/:inspectionId" element={<InspectionDetails />} />
                 <Route path="/vehicles" element={<Vehicles />} />
                 <Route path="/vehicles/new" element={<AddVehicle />} />
+                <Route path="/external-vehicles" element={<ExternalVehicles />} />
+                <Route path="/external-vehicles/owners" element={<ExternalVehicleOwners />} />
+                <Route path="/external-vehicles/owners/:ownerId" element={<ExternalVehicleOwnerDetails />} />
                 <Route path="/parts" element={<Parts />} />
                 <Route path="/services" element={<Services />} />
                 <Route path="/job-cards" element={<JobCards />} />

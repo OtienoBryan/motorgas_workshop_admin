@@ -29,7 +29,7 @@ import {
   QrCode,
   Download,
 } from 'lucide-react'
-import { Client, mapConversionClient } from './Clients'
+import { Client, mapConversionClient, RELATIONSHIP_STATUS_LABELS } from './Clients'
 import { ESTIMATE_STAGE_STATUSES, STATUS_STYLES as JOB_STATUS_STYLES, STATUS_LABELS as JOB_STATUS_LABELS } from './JobCardForm'
 
 interface Vehicle {
@@ -262,6 +262,33 @@ const ClientDetails: React.FC = () => {
         {/* Information */}
         {activeTab === 'information' && (
           <div className="space-y-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-50">
+                <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Client Details</h2>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-y divide-gray-50">
+                {([
+                  [<UserCheck className="h-3.5 w-3.5" />, 'Name', client.name],
+                  [<CreditCard className="h-3.5 w-3.5" />, 'Account Number', client.accountNumber],
+                  [<Tags className="h-3.5 w-3.5" />, 'Category', client.category === 'company' ? 'Company' : 'Individual'],
+                  [<Building2 className="h-3.5 w-3.5" />, 'Organization Type', client.organizationType
+                    ? client.organizationType.charAt(0).toUpperCase() + client.organizationType.slice(1) : undefined],
+                  [<Building2 className="h-3.5 w-3.5" />, 'Organization Name', client.organizationName],
+                  ...(client.category === 'individual' ? [
+                    [<UserCheck className="h-3.5 w-3.5" />, 'First Name', client.firstName],
+                    [<UserCheck className="h-3.5 w-3.5" />, 'Middle Name', client.middleName],
+                    [<UserCheck className="h-3.5 w-3.5" />, 'Surname', client.surname],
+                  ] : []),
+                  [<UserCheck className="h-3.5 w-3.5" />, 'Relationship Status', client.relationshipStatus
+                    ? RELATIONSHIP_STATUS_LABELS[client.relationshipStatus] : undefined],
+                  [<FileText className="h-3.5 w-3.5" />, 'Tax PIN', client.taxPin],
+                  [<FileText className="h-3.5 w-3.5" />, 'Notes', client.notes],
+                ] as [React.ReactNode, string, string | undefined][]).map(([icon, label, value]) => (
+                  <InfoCell key={label} icon={icon} label={label} value={value || '—'} muted={!value} />
+                ))}
+              </div>
+            </div>
+
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-50">
                 <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Contact Information</h2>
