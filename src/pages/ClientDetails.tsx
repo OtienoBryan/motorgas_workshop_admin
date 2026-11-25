@@ -299,6 +299,7 @@ const ClientDetails: React.FC = () => {
                   ? <InfoCell icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={client.email} />
                   : <InfoCell icon={<Mail className="h-3.5 w-3.5" />} label="Email" value="—" muted />
                 }
+                <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Country" value={client.country || '—'} muted={!client.country} />
                 {client.region
                   ? <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Region" value={client.region} />
                   : <InfoCell icon={<MapPin className="h-3.5 w-3.5" />} label="Region" value="—" muted />

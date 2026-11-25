@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { adminApiService, Sale, Station, KeyAccount, ConversionClient, Vehicle, Staff } from '../services/api'
+import { adminApiService, Sale, Station, KeyAccount, ConversionClient, Vehicle, Staff, SalesPageParams } from '../services/api'
 import {
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
   ArrowLeft,
   Search,
   Download,
@@ -17,6 +20,9 @@ import {
   Users,
   X
 } from 'lucide-react'
+
+const formatCurrency = (n: number) =>
+  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const SalesReport: React.FC = () => {
   const [searchParams] = useSearchParams()
@@ -49,41 +55,81 @@ const SalesReport: React.FC = () => {
     ? Number(selectedClientFilter.slice(3))
     : null
 
-  const [datePreset, setDatePreset] = useState<'today' | 'this_month' | 'last_month' | 'last_90' | 'all' | 'custom'>('this_month')
-  const [shift, setShift] = useState<'all' | 'shift1' | 'shift2'>('all')
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
+  // Default view: the current business day and the shift running right now.
+  // Shift 1 = 07:00–18:59, Shift 2 = 19:00–06:59; before 7am, shift 2 still belongs to yesterday's business day.
+  const [defaults] = useState(() => {
+    const now = new Date()
+    const h = now.getHours()
+    const shift: 'shift1' | 'shift2' = h >= 7 && h < 19 ? 'shift1' : 'shift2'
+    if (h >= 7) return { preset: 'today' as const, shift, day: '' }
+    const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+    const day = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`
+    return { preset: 'custom' as const, shift, day }
+  })
+  const [datePreset, setDatePreset] = useState<'today' | 'this_month' | 'last_month' | 'last_90' | 'all' | 'custom'>(defaults.preset)
+  const [shift, setShift] = useState<'all' | 'shift1' | 'shift2'>(defaults.shift)
+  const [customStart, setCustomStart] = useState(defaults.day)
+  const [customEnd, setCustomEnd] = useState(defaults.day)
 
-  const dateRange = useMemo(() => {
-    if (datePreset === 'all') return null
+  const [page, setPage] = useState(1)
+  // 0 = "All" — one page holding up to ALL_PAGE_SIZE rows (the server's maximum)
+  const ALL_PAGE_SIZE = 5000
+  const [pageSize, setPageSize] = useState(10)
+  const effectivePageSize = pageSize === 0 ? ALL_PAGE_SIZE : pageSize
+  const [total, setTotal] = useState(0)
+  const [summary, setSummary] = useState({ totalSales: 0, totalQuantity: 0, totalRevenue: 0, uniqueVehicles: 0 })
+  const [fetching, setFetching] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  // Business-day range sent to the server as YYYY-MM-DD (the server maps a day to 07:00 → 07:00).
+  const dateRange = useMemo<{ startDate?: string; endDate?: string }>(() => {
+    if (datePreset === 'all') return {}
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     const now = new Date()
     let start: Date
-    let end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+    let end = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
     if (datePreset === 'today') {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      start = end
     } else if (datePreset === 'this_month') {
       start = new Date(now.getFullYear(), now.getMonth(), 1)
     } else if (datePreset === 'last_month') {
       start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+      end = new Date(now.getFullYear(), now.getMonth(), 0)
     } else if (datePreset === 'last_90') {
-      start = new Date(now)
-      start.setDate(start.getDate() - 89)
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 89)
     } else {
-      start = customStart ? new Date(`${customStart}T00:00:00`) : new Date(now.getFullYear(), now.getMonth(), 1)
-      end = customEnd ? new Date(`${customEnd}T23:59:59.999`) : end
+      return {
+        startDate: customStart || fmt(new Date(now.getFullYear(), now.getMonth(), 1)),
+        endDate: customEnd || fmt(end),
+      }
     }
-    return { start, end }
+    return { startDate: fmt(start), endDate: fmt(end) }
   }, [datePreset, customStart, customEnd])
 
+  // Debounce typing so each keystroke doesn't hit the server
   useEffect(() => {
-    fetchSales()
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchTerm])
+
+  // Reference data is loaded once, not on every filter change
+  useEffect(() => {
     fetchStations()
     fetchKeyAccounts()
     fetchConversionClients()
     fetchStaff()
-  }, [selectedStationId, selectedClientFilter])
+  }, [])
+
+  // Any filter change goes back to the first page
+  useEffect(() => {
+    setPage(1)
+  }, [selectedStationId, selectedClientFilter, dateRange, shift, debouncedSearch, pageSize])
+
+  useEffect(() => {
+    fetchSales()
+  }, [selectedStationId, selectedClientFilter, dateRange, shift, debouncedSearch, page, pageSize])
 
   useEffect(() => {
     if (selectedKeyAccountId) {
@@ -102,22 +148,42 @@ const SalesReport: React.FC = () => {
     }
   }, [sales.length, selectedKeyAccountId])
 
+  const buildSalesParams = (overrides: Partial<SalesPageParams> = {}): SalesPageParams => ({
+    page,
+    pageSize: effectivePageSize,
+    stationId: selectedStationId || undefined,
+    keyAccountId: selectedKeyAccountId || undefined,
+    conversionClientId: selectedConversionClientId || undefined,
+    startDate: dateRange.startDate,
+    endDate: dateRange.endDate,
+    shift: shift === 'all' ? undefined : shift,
+    search: debouncedSearch || undefined,
+    ...overrides,
+  })
+
+  // Only the current page is fetched; the server also returns totals for every matching row.
+  // A request counter drops responses from superseded requests (fast filter/page changes).
+  const latestRequest = useRef(0)
   const fetchSales = async () => {
+    const requestId = ++latestRequest.current
     try {
-      console.log('💰 [SalesReport] Fetching sales...')
-      setLoading(true)
-      const data = await adminApiService.getSales(
-        selectedStationId || undefined,
-        selectedKeyAccountId || undefined,
-        selectedConversionClientId || undefined
-      )
-      console.log('✅ [SalesReport] Sales fetched:', data)
-      setSales(Array.isArray(data) ? data : [])
+      setFetching(true)
+      const result = await adminApiService.getSalesPage(buildSalesParams())
+      if (requestId !== latestRequest.current) return
+      setSales(result.data)
+      setTotal(result.total)
+      setSummary(result.summary)
     } catch (error) {
+      if (requestId !== latestRequest.current) return
       console.error('❌ [SalesReport] Error fetching sales:', error)
       setSales([])
+      setTotal(0)
+      setSummary({ totalSales: 0, totalQuantity: 0, totalRevenue: 0, uniqueVehicles: 0 })
     } finally {
-      setLoading(false)
+      if (requestId === latestRequest.current) {
+        setFetching(false)
+        setLoading(false)
+      }
     }
   }
 
@@ -261,10 +327,27 @@ const SalesReport: React.FC = () => {
     return stringValue
   }
 
-  const exportToCSV = () => {
-    if (filteredSales.length === 0) {
+  const exportToCSV = async () => {
+    if (total === 0) {
       alert('No data to export')
       return
+    }
+
+    // The table only holds one page, so pull every matching row in chunks for the export
+    let exportSales: Sale[] = []
+    try {
+      setExporting(true)
+      const chunk = 1000
+      for (let p = 1; exportSales.length < total; p++) {
+        const res = await adminApiService.getSalesPage(buildSalesParams({ page: p, pageSize: chunk }))
+        if (res.data.length === 0) break
+        exportSales = exportSales.concat(res.data)
+      }
+    } catch (error) {
+      alert(`Export failed: ${(error as any)?.message || 'Unknown error'}`)
+      return
+    } finally {
+      setExporting(false)
     }
 
     const headers = [
@@ -282,7 +365,7 @@ const SalesReport: React.FC = () => {
       'Created At'
     ]
 
-    const rows = filteredSales.map(sale => [
+    const rows = exportSales.map(sale => [
       formatDateForCSV(sale.saleDate),
       escapeCSV(getStationName(sale.stationId)),
       escapeCSV(getOwnerName(sale)),
@@ -333,55 +416,25 @@ const SalesReport: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
-  const filteredSales = sales.filter(sale => {
-    const matchesSearch =
-      getStationName(sale.stationId).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getOwnerName(sale).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getVehicleName(sale).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.referenceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.clientType.toLowerCase().includes(searchTerm.toLowerCase())
-
-    const matchesDateRange = !dateRange || (() => {
-      // A "day" runs 7am → 7am, so shift the sale back 7h to find the day it belongs to
-      const d = new Date(new Date(sale.saleDate).getTime() - 7 * 60 * 60 * 1000)
-      return d >= dateRange.start && d <= dateRange.end
-    })()
-
-    // Shift 1: 07:00–18:59, Shift 2: 19:00–06:59 (spans midnight)
-    const matchesShift = shift === 'all' || (() => {
-      const h = new Date(sale.saleDate).getHours()
-      const isDay = h >= 7 && h < 19
-      return shift === 'shift1' ? isDay : !isDay
-    })()
-
-    return matchesSearch && matchesDateRange && matchesShift
-  })
-
-  const hasActiveFilters = datePreset !== 'this_month' || shift !== 'all' || selectedStationId !== null || selectedClientFilter !== '' || searchTerm !== ''
+  const hasActiveFilters = datePreset !== defaults.preset || shift !== defaults.shift || customStart !== defaults.day || customEnd !== defaults.day || selectedStationId !== null || selectedClientFilter !== '' || searchTerm !== ''
 
   const clearFilters = () => {
-    setDatePreset('this_month')
-    setShift('all')
-    setCustomStart('')
-    setCustomEnd('')
+    setDatePreset(defaults.preset)
+    setShift(defaults.shift)
+    setCustomStart(defaults.day)
+    setCustomEnd(defaults.day)
     setSelectedStationId(null)
     setSelectedClientFilter('')
     setSearchTerm('')
   }
 
-  // Calculate summary statistics
-  const totalSales = filteredSales.length
-  const totalQuantity = filteredSales.reduce((sum, s) => sum + Number(s.quantity), 0)
-  const totalRevenue = filteredSales.reduce((sum, s) => sum + Number(s.totalAmount), 0)
+  // Summary statistics come from the server and cover every matching sale, not just this page
+  const { totalSales, totalQuantity, totalRevenue, uniqueVehicles: uniqueVehicleCount } = summary
   const avv = totalSales > 0 ? totalQuantity / totalSales : 0
-  // vehicleId and conversionVehicleId are independent id spaces, so a plain
-  // numeric Set would collide a regular vehicle #8 with a conversion vehicle #8
-  const uniqueVehicleCount = new Set(
-    filteredSales
-      .map(s => s.vehicleId ? `v-${s.vehicleId}` : s.conversionVehicleId ? `cv-${s.conversionVehicleId}` : null)
-      .filter((key): key is string => key !== null)
-  ).size
+
+  const totalPages = Math.max(1, Math.ceil(total / effectivePageSize))
+  const rangeStart = total === 0 ? 0 : (page - 1) * effectivePageSize + 1
+  const rangeEnd = Math.min(page * effectivePageSize, total)
 
   if (loading) {
     return (
@@ -409,8 +462,22 @@ const SalesReport: React.FC = () => {
           </button>
           <h1 className="text-sm font-bold text-gray-900">Sales Report</h1>
           <button
+            onClick={() => {
+              // Carry the report's current filters over to the graph page
+              const qs = new URLSearchParams()
+              Object.entries(buildSalesParams()).forEach(([k, v]) => {
+                if (k !== 'page' && k !== 'pageSize' && v !== undefined && v !== '') qs.append(k, String(v))
+              })
+              navigate(`/sales/report/daily?${qs.toString()}`)
+            }}
+            className="ml-auto flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            <BarChart3 className="h-3 w-3" />
+            Daily Graph
+          </button>
+          <button
             onClick={() => navigate('/sales/report/summary')}
-            className="ml-auto flex items-center gap-1 px-2 py-1 text-[11px] bg-indigo-600 text-white rounded hover:bg-indigo-700"
+            className="flex items-center gap-1 px-2 py-1 text-[11px] bg-indigo-600 text-white rounded hover:bg-indigo-700"
           >
             <Receipt className="h-3 w-3" />
             Sales Summary
@@ -547,12 +614,12 @@ const SalesReport: React.FC = () => {
 
               <button
                 onClick={exportToCSV}
-                disabled={filteredSales.length === 0}
+                disabled={total === 0 || exporting}
                 className="flex items-center justify-center gap-1 px-3 py-1 text-[11px] font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                title={filteredSales.length === 0 ? 'No data to export' : 'Export to CSV'}
+                title={total === 0 ? 'No data to export' : 'Export all matching sales to CSV'}
               >
                 <Download className="h-3 w-3" />
-                Export CSV
+                {exporting ? 'Exporting…' : 'Export CSV'}
               </button>
             </div>
           </div>
@@ -583,7 +650,7 @@ const SalesReport: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <div className="text-[10px] text-gray-500 font-medium truncate">Total revenue</div>
-                <div className="text-sm font-bold text-gray-900 truncate">{totalRevenue.toFixed(2)}</div>
+                <div className="text-sm font-bold text-gray-900 truncate">{formatCurrency(totalRevenue)}</div>
               </div>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-2.5 flex items-center gap-2.5">
@@ -629,8 +696,8 @@ const SalesReport: React.FC = () => {
         </div>
 
         {/* Sales Table */}
-        <div className="bg-white rounded border overflow-hidden">
-          {filteredSales.length === 0 ? (
+        <div className={`bg-white rounded border overflow-hidden transition-opacity ${fetching ? 'opacity-60' : ''}`}>
+          {sales.length === 0 ? (
             <div className="text-center py-8 text-[11px] text-gray-500">
               No sales found
             </div>
@@ -654,17 +721,20 @@ const SalesReport: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredSales.map((sale) => (
+                  {sales.map((sale) => {
+                    // Vehicle photo from conversion_vehicles.photo_url (via conversion_vehicle_id); fall back to the sale's own image.
+                    const imageSrc = sale.conversionVehicle?.photo_url || sale.imagePath
+                    return (
                     <tr key={sale.id} className="hover:bg-gray-50">
                       <td className="px-2 py-1 text-[11px]">
-                        {sale.imagePath ? (
+                        {imageSrc ? (
                           <button
                             type="button"
-                            onClick={() => setExpandedImage(sale.imagePath!)}
+                            onClick={() => setExpandedImage(imageSrc)}
                             className="w-8 h-8 rounded bg-gray-100 overflow-hidden cursor-zoom-in hover:opacity-80 transition-opacity"
                             title="Click to expand"
                           >
-                            <img src={sale.imagePath} alt="Sale" className="w-full h-full object-cover" />
+                            <img src={imageSrc} alt="Vehicle" className="w-full h-full object-cover" />
                           </button>
                         ) : (
                           <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
@@ -678,15 +748,53 @@ const SalesReport: React.FC = () => {
                       <td className="px-2 py-1 text-[11px] text-gray-600">{getVehicleName(sale)}</td>
                       <td className="px-2 py-1 text-[11px] text-right font-medium">{Number(sale.quantity).toFixed(2)} L</td>
                       <td className="px-2 py-1 text-[11px] text-right">{Number(sale.unitPrice).toFixed(2)}</td>
-                      <td className="px-2 py-1 text-[11px] text-right font-bold text-purple-600">{Number(sale.totalAmount).toFixed(2)}</td>
+                      <td className="px-2 py-1 text-[11px] text-right font-bold text-purple-600">{formatCurrency(Number(sale.totalAmount))}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-600">{sale.paymentMethod || '-'}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-600">{sale.referenceNumber || '-'}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-600">{getStaffName(sale.createdBy)}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-600 max-w-xs truncate">{sale.notes || '-'}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {total > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-2 py-1.5 border-t bg-gray-50 text-[11px] text-gray-600">
+              <div className="flex items-center gap-2">
+                <span>Showing {rangeStart}–{rangeEnd} of {total}</span>
+                <label className="flex items-center gap-1">
+                  Rows
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="px-1 py-0.5 border border-gray-300 rounded bg-white"
+                  >
+                    {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                    <option value={0}>All</option>
+                  </select>
+                </label>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1 || fetching}
+                  className="p-1 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="px-2">Page {page} of {totalPages}</span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages || fetching}
+                  className="p-1 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           )}
         </div>

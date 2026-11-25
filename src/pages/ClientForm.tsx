@@ -21,7 +21,8 @@ import {
   CalendarClock,
   ShieldOff,
 } from 'lucide-react'
-import { COUNTRY_DIAL_CODES, DEFAULT_COUNTRY_ISO, countryFlag, splitPhone, joinPhone } from '../utils/countryCodes'
+import SearchableSelect from '../components/SearchableSelect'
+import { COUNTRY_NAMES, COUNTRY_DIAL_CODES, DEFAULT_COUNTRY_ISO, countryFlag, splitPhone, joinPhone } from '../utils/countryCodes'
 import { Client, RelationshipStatus, RELATIONSHIP_STATUS_LABELS, REFERRAL_SOURCES, Toggle, mapConversionClient, buildClientPayload } from './Clients'
 
 const emptyForm: Partial<Client> = {
@@ -43,6 +44,11 @@ const splitLegacyName = (fullName: string) => {
     last: tokens.length > 1 ? tokens[tokens.length - 1] : '',
   }
 }
+
+const dialOptions = COUNTRY_DIAL_CODES.map(c => ({
+  value: c.iso,
+  label: `${countryFlag(c.iso)} ${c.dial} ${c.name}`,
+}))
 
 const ORG_NAME_LABELS: Record<'individual' | 'sacco' | 'company', string> = {
   individual: 'Full Name', sacco: 'Sacco Name', company: 'Company Name',
@@ -87,7 +93,7 @@ const ClientForm: React.FC = () => {
           surname: client.surname || legacy?.last || '',
           relationshipStatus: client.relationshipStatus,
           email: client.email || '', contact: phone.number,
-          address: client.address || '', notes: client.notes || '', region: client.region,
+          address: client.address || '', country: client.country || '', notes: client.notes || '', region: client.region,
           category: client.category, taxPin: client.taxPin || '', accountNumber: client.accountNumber || '',
           organizationType: client.organizationType, organizationName: client.organizationName || '',
           referralSource: client.referralSource || '', referralNotes: client.referralNotes || '',
@@ -214,6 +220,11 @@ const ClientForm: React.FC = () => {
                     <option value="company">Company</option>
                   </select>
                 </div>
+                <div>
+                  <label className={lbl}>Country <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <SearchableSelect value={formData.country || ''} options={COUNTRY_NAMES}
+                    onChange={v => setFormData(p => ({ ...p, country: v }))} placeholder="Select country…" />
+                </div>
                 {formData.organizationType && (
                   <div>
                     <label className={lbl}>
@@ -277,13 +288,16 @@ const ClientForm: React.FC = () => {
                 <div>
                   <label className={lbl}>Contact *</label>
                   <div className="flex gap-2">
-                    <select value={countryIso} onChange={e => setCountryIso(e.target.value)}
-                      className="w-36 shrink-0 px-2 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-gray-700"
-                      title={COUNTRY_DIAL_CODES.find(c => c.iso === countryIso)?.name}>
-                      {COUNTRY_DIAL_CODES.map(c => (
-                        <option key={c.iso} value={c.iso}>{countryFlag(c.iso)} {c.dial} {c.name}</option>
-                      ))}
-                    </select>
+                    <div className="w-36 shrink-0">
+                      <SearchableSelect
+                        value={countryIso}
+                        onChange={v => setCountryIso(v || DEFAULT_COUNTRY_ISO)}
+                        options={dialOptions}
+                        buttonLabel={`${countryFlag(countryIso)} ${COUNTRY_DIAL_CODES.find(c => c.iso === countryIso)?.dial ?? ''}`}
+                        menuClassName="min-w-[18rem]"
+                        clearable={false}
+                      />
+                    </div>
                     <div className={iconWrap + ' flex-1'}>
                       <Phone className={fieldIcon} />
                       <input type="tel" name="contact" value={formData.contact || ''} required

@@ -33,6 +33,7 @@ export interface Client {
   email?: string
   contact: string
   address?: string
+  country?: string
   notes?: string
   region: string
   category: 'individual' | 'company'
@@ -93,7 +94,7 @@ export const mapConversionClient = (c: ConversionClient): Client => ({
   firstName: c.first_name || undefined, middleName: c.middle_name || undefined, surname: c.surname || undefined,
   relationshipStatus: c.relationship_status || undefined,
   email: c.email || undefined,
-  contact: c.contact, address: c.address || undefined, notes: c.description || undefined,
+  contact: c.contact, address: c.address || undefined, country: c.country || undefined, notes: c.description || undefined,
   region: c.region || '', category: (c.category as 'individual' | 'company') || 'individual',
   organizationType: c.organization_type || undefined, organizationName: c.organization_name || undefined,
   taxPin: c.tax_pin || undefined, accountNumber: c.account_number || undefined,
@@ -117,6 +118,7 @@ export const buildClientPayload = (clientData: Partial<Client>) => ({
   organization_type: clientData.organizationType || undefined,
   organization_name: clientData.organizationType ? (clientData.organizationName || undefined) : undefined,
   tax_pin: clientData.taxPin || '', address: clientData.address || '',
+  country: clientData.country || '',
   description: clientData.notes || undefined,
   region: clientData.region || '', is_active: 1,
   referral_source: clientData.referralSource || undefined,

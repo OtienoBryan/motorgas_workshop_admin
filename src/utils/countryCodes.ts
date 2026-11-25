@@ -40,6 +40,8 @@ const RAW: [string, string, string][] = [
 
 export const COUNTRY_DIAL_CODES: CountryDialCode[] = RAW.map(([iso, name, dial]) => ({ iso, name, dial }))
 
+export const COUNTRY_NAMES: string[] = COUNTRY_DIAL_CODES.map(c => c.name).sort((a, b) => a.localeCompare(b))
+
 export const DEFAULT_COUNTRY_ISO = 'KE'
 
 export const countryFlag = (iso: string) =>

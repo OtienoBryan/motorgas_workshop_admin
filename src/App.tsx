@@ -26,6 +26,7 @@ import InspectionForm from './pages/InspectionForm'
 import ChecklistTemplates from './pages/ChecklistTemplates'
 import Vehicles from './pages/Vehicles'
 import ExternalVehicles from './pages/ExternalVehicles'
+import SalesDailyGraph from './pages/SalesDailyGraph'
 import ExternalVehicleOwners from './pages/ExternalVehicleOwners'
 import ExternalVehicleOwnerDetails from './pages/ExternalVehicleOwnerDetails'
 import Parts from './pages/Parts'
@@ -122,6 +123,7 @@ function AppContent() {
                 <Route path="/station-expenses" element={<StationExpenses />} />
                 <Route path="/sales/post" element={<PostSale />} />
                 <Route path="/sales/report" element={<SalesReport />} />
+                <Route path="/sales/report/daily" element={<SalesDailyGraph />} />
                 <Route path="/sales/report/summary" element={<SalesSummaryReport />} />
                 <Route path="/sales/report/summary/:stationId" element={<StationSalesDetail />} />
                 <Route path="/sales/report/summary/:stationId/day/:date" element={<StationDaySales />} />

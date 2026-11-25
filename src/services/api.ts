@@ -299,6 +299,39 @@ export interface Passenger {
   updated_at: string
 }
 
+export interface SalesPageParams {
+  page?: number
+  pageSize?: number
+  stationId?: number
+  keyAccountId?: number
+  conversionClientId?: number
+  startDate?: string
+  endDate?: string
+  shift?: 'shift1' | 'shift2'
+  search?: string
+}
+
+export interface DailySalesTotal {
+  /** Business day (7am–7am), YYYY-MM-DD */
+  date: string
+  totalSales: number
+  totalQuantity: number
+  totalRevenue: number
+}
+
+export interface SalesPageResult {
+  data: Sale[]
+  total: number
+  page: number
+  pageSize: number
+  summary: {
+    totalSales: number
+    totalQuantity: number
+    totalRevenue: number
+    uniqueVehicles: number
+  }
+}
+
 export interface Country {
   id: number
   name: string
@@ -468,6 +501,7 @@ export interface ConversionClient {
   email: string | null
   contact: string
   address: string | null
+  country?: string | null
   description?: string | null
   region: string | null
   category: 'individual' | 'company'
@@ -3888,6 +3922,22 @@ class AdminApiService {
     const query = params.toString()
     const url = query ? `/sales?${query}` : '/sales'
     return this.request<Sale[]>(url)
+  }
+
+  async getDailySalesTotals(params: SalesPageParams): Promise<DailySalesTotal[]> {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') qs.append(k, String(v))
+    })
+    return this.request<DailySalesTotal[]>(`/sales/report/daily?${qs.toString()}`)
+  }
+
+  async getSalesPage(params: SalesPageParams): Promise<SalesPageResult> {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') qs.append(k, String(v))
+    })
+    return this.request<SalesPageResult>(`/sales/report/list?${qs.toString()}`)
   }
 
   async getWeeklySalesReport(startDate: string, endDate: string, stationId?: number): Promise<WeeklySalesReport> {
